@@ -1,36 +1,12 @@
 import type { } from "three"; // keep consistent with other modules if needed
 
-/**
- * Background music system (lofi vibes for the menu + game world).
- *
- * A lofi track is present at public/sounds/lofi-ambient.mp3 (you added it).
- *
- * To replace or change the track:
- * 1. Put your new royalty-free lofi file in public/sounds/
- * 2. Name it lofi-ambient.mp3 (or update the default in initBackgroundMusic below).
- *
- * Supported formats: .mp3, .ogg, .wav (mp3 is widely supported).
- *
- * Recommended free sources (always verify the license for your use):
- * - https://pixabay.com/music/search/lofi/
- * - https://freesound.org (search lofi + creative commons)
- * - https://www.chosic.com/free-music/lofi/
- * - https://www.bensound.com
- *
- * For the "Vibe World" horror prototype, chill / dreamy / slightly melancholic lofi works great
- * (vinyl crackle, soft pads, distant melodies, light rain sounds, etc.).
- *
- * How it works in the game:
- *   - Music starts when you select "Open World" on the menu (user gesture → browser allows audio)
- *   - It continues looping while playing the 3D world
- *   - Press M anytime to toggle mute/unmute (menu or in-game)
- */
 
 let audio: HTMLAudioElement | null = null;
 let currentSrc = '';
 let isPlaying = false;
 
 const DEFAULT_VOLUME = 0.28; // nice chill lofi level (not too loud)
+let currentVolume = DEFAULT_VOLUME;
 
 export function initBackgroundMusic(src = '/sounds/lofi-ambient.mp3') {
   if (audio && currentSrc === src) return;
@@ -43,7 +19,7 @@ export function initBackgroundMusic(src = '/sounds/lofi-ambient.mp3') {
 
   audio = new Audio();
   audio.loop = true;
-  audio.volume = DEFAULT_VOLUME;
+  audio.volume = currentVolume;
   audio.src = src;
   currentSrc = src;
 
@@ -106,9 +82,14 @@ export function toggleBackgroundMusic() {
 }
 
 export function setMusicVolume(volume: number) {
+  currentVolume = Math.max(0, Math.min(1, volume));
   if (audio) {
-    audio.volume = Math.max(0, Math.min(1, volume));
+    audio.volume = currentVolume;
   }
+}
+
+export function getMusicVolume(): number {
+  return currentVolume;
 }
 
 export function isMusicPlaying(): boolean {

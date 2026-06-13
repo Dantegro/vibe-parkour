@@ -38,6 +38,43 @@ export function sampleGroundHeight(
   return hits.length > 0 ? hits[0].point.y : 0;
 }
 
+/** Place the camera at standing height over sampled terrain at its current XZ. */
+export function placePlayerOnGround(
+  eyePos: THREE.Vector3,
+  world: CollisionWorld,
+  raycaster: THREE.Raycaster,
+  rayOrigin: THREE.Vector3,
+): number {
+  const groundHeight = world.groundMesh
+    ? sampleGroundHeight(world.groundMesh, eyePos.x, eyePos.z, raycaster, rayOrigin)
+    : 0;
+  eyePos.y = groundHeight + PLAYER_EYE_HEIGHT;
+  return groundHeight;
+}
+
+/**
+ * Hard recovery when feet have penetrated the terrain mesh (e.g. bad spawn or
+ * missed frame). Prevents falling through the world.
+ */
+function recoverFromTerrainPenetration(
+  eyePos: THREE.Vector3,
+  groundHeight: number,
+  feetOnBox: boolean,
+): FloorResolveResult | null {
+  if (feetOnBox) return null;
+
+  const pFeet = feetY(eyePos.y);
+  if (pFeet >= groundHeight - 0.05) return null;
+
+  eyePos.y = groundHeight + PLAYER_EYE_HEIGHT;
+  return {
+    velocityY: 0,
+    canJump: true,
+    onSurface: true,
+    feetY: groundHeight,
+  };
+}
+
 function feetY(eyeY: number): number {
   return eyeY - PLAYER_FEET_OFFSET;
 }
@@ -313,12 +350,6 @@ export function resolveFloors(
     ? sampleGroundHeight(world.groundMesh, eyePos.x, eyePos.z, raycaster, rayOrigin)
     : 0;
 
-  const boxResult = resolveBoxFloors(eyePos, ctx, world.collidables, groundHeight);
-
-  if (boxResult.onSurface) {
-    return boxResult;
-  }
-
   const pFeet = feetY(eyePos.y);
   const boxSupport = feetRestingOnBox(
     eyePos.x,
@@ -328,13 +359,31 @@ export function resolveFloors(
   );
   const feetOnBox = boxSupport !== null && pFeet >= boxSupport - 0.1;
 
+  const recovery = recoverFromTerrainPenetration(eyePos, groundHeight, feetOnBox);
+  if (recovery) return recovery;
+
+  const boxResult = resolveBoxFloors(eyePos, ctx, world.collidables, groundHeight);
+
+  if (boxResult.onSurface) {
+    return boxResult;
+  }
+
+  const pFeetAfter = feetY(eyePos.y);
+  const boxSupportAfter = feetRestingOnBox(
+    eyePos.x,
+    eyePos.z,
+    pFeetAfter,
+    world.collidables,
+  );
+  const feetOnBoxAfter = boxSupportAfter !== null && pFeetAfter >= boxSupportAfter - 0.1;
+
   if (world.groundMesh) {
     return applyTerrainFollow(
       eyePos,
       boxResult.velocityY,
       boxResult.canJump,
       groundHeight,
-      feetOnBox,
+      feetOnBoxAfter,
     );
   }
 

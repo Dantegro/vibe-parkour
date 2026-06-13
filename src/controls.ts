@@ -6,6 +6,7 @@ import {
   type MovementInput,
 } from "./player/movement.js";
 import type { CollisionWorld } from "./player/collision.js";
+import { placePlayerOnGround } from "./player/collision.js";
 
 export interface PlayerAPI {
   camera: THREE.PerspectiveCamera;
@@ -102,6 +103,14 @@ export function initPlayerControls(
   const rayOrigin = new THREE.Vector3();
 
   const world: CollisionWorld = { collidables, groundMesh };
+
+  const spawnGroundY = placePlayerOnGround(
+    camera.position,
+    world,
+    raycaster,
+    rayOrigin,
+  );
+  movementState.prevFeetY = spawnGroundY;
 
   function readInput(): MovementInput {
     return {

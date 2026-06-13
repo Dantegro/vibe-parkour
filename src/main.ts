@@ -6,6 +6,8 @@ import {
   playBackgroundMusic,
   toggleBackgroundMusic,
   disposeBackgroundMusic,
+  setMusicVolume,
+  getMusicVolume,
 } from "./audio.js";
 
 const canvas = document.querySelector("#game") as HTMLCanvasElement;
@@ -242,11 +244,50 @@ startBtn.disabled = true;
 startBtn.classList.add('disabled');
 startBtnEl = startBtn;
 
+// Simple volume slider for the lofi music (works before and after selecting the mode)
+const volumeContainer = document.createElement("div");
+volumeContainer.style.cssText = "margin-top:18px;display:flex;flex-direction:column;align-items:center;gap:3px;";
+
+const volumeLabel = document.createElement("div");
+volumeLabel.style.cssText = "font-size:9px;letter-spacing:1.5px;opacity:0.45;";
+volumeLabel.textContent = "MUSIC VOLUME";
+
+const volumeRow = document.createElement("div");
+volumeRow.style.cssText = "display:flex;align-items:center;gap:6px;";
+
+const volumeSlider = document.createElement("input");
+volumeSlider.type = "range";
+volumeSlider.min = "0";
+volumeSlider.max = "1";
+volumeSlider.step = "0.01";
+volumeSlider.style.cssText = "width:120px;accent-color:#4a6a4a;cursor:pointer;";
+
+const volumeValue = document.createElement("span");
+volumeValue.style.cssText = "font-size:10px;opacity:0.6;width:26px;text-align:right;";
+
+function syncVolumeUI() {
+  const v = getMusicVolume();
+  volumeSlider.value = v.toString();
+  volumeValue.textContent = Math.round(v * 100) + "%";
+}
+
+volumeSlider.addEventListener("input", () => {
+  const vol = parseFloat(volumeSlider.value);
+  setMusicVolume(vol);
+  volumeValue.textContent = Math.round(vol * 100) + "%";
+});
+
+// Initialize from the audio module (after initBackgroundMusic was called)
+syncVolumeUI();
+
+volumeRow.append(volumeSlider, volumeValue);
+volumeContainer.append(volumeLabel, volumeRow);
+
 const hint = document.createElement("div");
 hint.style.cssText = "margin-top:14px;font-size:10px;opacity:0.35;";
 hint.textContent = "Press START GAME (or Enter) to begin • M to toggle lofi music • WASD + mouse after lock";
 
-menu.append(title, tagline, gamesLabel, gameEntry, startBtn, hint);
+menu.append(title, tagline, gamesLabel, gameEntry, startBtn, volumeContainer, hint);
 document.body.appendChild(menu);
 
 // Preload lofi music early (no sound until user gesture)
@@ -296,6 +337,20 @@ window.addEventListener("keydown", (e) => {
   if (e.code === "KeyM") {
     e.preventDefault();
     toggleBackgroundMusic();
+  }
+});
+
+// Simple in-game (and menu) volume control with keyboard
+// [ / ] or - / + to adjust music volume (useful after starting the game when the slider is gone)
+window.addEventListener("keydown", (e) => {
+  if (e.key === "[" || e.key === "-") {
+    e.preventDefault();
+    const newVol = Math.max(0, getMusicVolume() - 0.05);
+    setMusicVolume(newVol);
+  } else if (e.key === "]" || e.key === "+" || e.key === "=") {
+    e.preventDefault();
+    const newVol = Math.min(1, getMusicVolume() + 0.05);
+    setMusicVolume(newVol);
   }
 });
 
