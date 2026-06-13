@@ -34,7 +34,28 @@ let menu: HTMLDivElement | undefined;
 let menuStyle: HTMLStyleElement | undefined;
 let gameStarted = false;
 
+let selectedGameMode: string | null = null;
+let gameEntryEl: HTMLDivElement | undefined;
+let startBtnEl: HTMLButtonElement | undefined;
+let gamesLabelEl: HTMLDivElement | undefined;
+
 function startGame() {
+  if (!selectedGameMode) {
+    // Visually prompt the user to select a game mode first
+    if (gameEntryEl) {
+      gameEntryEl.classList.add('selecting');
+      setTimeout(() => gameEntryEl?.classList.remove('selecting'), 380);
+    }
+    if (gamesLabelEl) {
+      const originalColor = gamesLabelEl.style.color;
+      gamesLabelEl.style.color = '#cc9966';
+      setTimeout(() => {
+        if (gamesLabelEl) gamesLabelEl.style.color = originalColor || '';
+      }, 650);
+    }
+    return;
+  }
+
   if (gameStarted || !menu || !menu.parentNode) return;
   gameStarted = true;
 
@@ -130,7 +151,7 @@ menu.style.cssText =
 
 const title = document.createElement("div");
 title.style.cssText = "font-size:48px;letter-spacing:5px;margin-bottom:2px;color:#d8d8e2;";
-title.textContent = "OPEN WORLD";
+title.textContent = "VIBE WORLD";
 
 const tagline = document.createElement("div");
 tagline.style.cssText = "font-size:12px;letter-spacing:2.5px;opacity:0.4;margin-bottom:64px;";
@@ -138,7 +159,7 @@ tagline.textContent = "PROTOTYPE";
 
 const gamesLabel = document.createElement("div");
 gamesLabel.style.cssText = "font-size:10px;letter-spacing:2px;opacity:0.45;margin-bottom:6px;";
-gamesLabel.textContent = "GAMES";
+gamesLabel.textContent = "GAME MODES";
 
 const gameEntry = document.createElement("div");
 gameEntry.className = "menu-entry selected";
@@ -150,13 +171,13 @@ startBtn.textContent = "START GAME";
 
 const hint = document.createElement("div");
 hint.style.cssText = "margin-top:14px;font-size:10px;opacity:0.35;";
-hint.textContent = "Enter / click to begin • WASD + mouse after lock";
+hint.textContent = "Press START GAME (or Enter) to begin • WASD + mouse after lock";
 
 menu.append(title, tagline, gamesLabel, gameEntry, startBtn, hint);
 document.body.appendChild(menu);
 
-// Start the game from the menu (button, entry click, or Enter key)
-gameEntry.addEventListener("click", startGame);
+// Start the game only by pressing the START GAME button (Enter also works as a keyboard shortcut).
+// The game mode entry is display-only; clicking it does not start the game.
 startBtn.addEventListener("click", startGame);
 
 window.addEventListener("keydown", (e) => {

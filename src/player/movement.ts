@@ -1,15 +1,18 @@
 import * as THREE from "three";
 import type { PointerLockControls } from "three/examples/jsm/controls/PointerLockControls.js";
-import { GRAVITY, JUMP_VELOCITY, MOVE_SPEED } from "./constants.js";
+import { GRAVITY, JUMP_VELOCITY, MOVE_SPEED, PLAYER_FEET_OFFSET } from "./constants.js";
 import {
   type CollisionWorld,
+  type FloorContext,
   resolveFloors,
   resolveWalls,
+  sampleGroundHeight,
 } from "./collision.js";
 
 export interface MovementState {
   velocityY: number;
   canJump: boolean;
+  prevFeetY: number;
 }
 
 export interface MovementInput {
@@ -19,7 +22,7 @@ export interface MovementInput {
 }
 
 export function createMovementState(): MovementState {
-  return { velocityY: 0, canJump: true };
+  return { velocityY: 0, canJump: true, prevFeetY: 0 };
 }
 
 export function updatePlayerMovement(
@@ -34,6 +37,11 @@ export function updatePlayerMovement(
 ): void {
   if (!controls.isLocked) return;
 
+  const wallCtx = { canJump: state.canJump, velocityY: state.velocityY };
+  const groundH = world.groundMesh
+    ? sampleGroundHeight(world.groundMesh, camera.position.x, camera.position.z, raycaster, rayOrigin)
+    : 0;
+
   const horizontalMove = { x: 0, z: 0 };
   const moveLen = Math.hypot(input.strafe, input.forward);
 
@@ -45,15 +53,20 @@ export function updatePlayerMovement(
     controls.moveForward(horizontalMove.z);
   }
 
-  resolveWalls(camera.position, world.collidables, horizontalMove);
+  resolveWalls(camera.position, world.collidables, horizontalMove, wallCtx, groundH);
 
   state.velocityY -= GRAVITY * delta;
   camera.position.y += state.velocityY * delta;
 
+  const floorCtx: FloorContext = {
+    velocityY: state.velocityY,
+    canJump: state.canJump,
+    prevFeetY: state.prevFeetY,
+  };
+
   const floor = resolveFloors(
     camera.position,
-    state.velocityY,
-    state.canJump,
+    floorCtx,
     world,
     raycaster,
     rayOrigin,
@@ -61,11 +74,12 @@ export function updatePlayerMovement(
   state.velocityY = floor.velocityY;
   state.canJump = floor.canJump;
 
-  // After vertical lift onto a platform, re-check walls so we are not pushed back out.
-  resolveWalls(camera.position, world.collidables);
+  resolveWalls(camera.position, world.collidables, undefined, wallCtx, groundH);
 
   if (input.jump && state.canJump) {
     state.velocityY = JUMP_VELOCITY;
     state.canJump = false;
   }
+
+  state.prevFeetY = camera.position.y - PLAYER_FEET_OFFSET;
 }

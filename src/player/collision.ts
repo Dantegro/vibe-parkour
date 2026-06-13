@@ -1,7 +1,5 @@
 import * as THREE from "three";
 import {
-  AIRBORNE_FEET_CLEARANCE,
-  FLOOR_MARGIN,
   LAND_SNAP_TOLERANCE,
   MAX_STEP_HEIGHT,
   PLAYER_EYE_HEIGHT,
@@ -18,6 +16,13 @@ const _box = new THREE.Box3();
 export interface CollisionWorld {
   collidables: THREE.Mesh[];
   groundMesh?: THREE.Mesh;
+}
+
+export interface FloorContext {
+  velocityY: number;
+  canJump: boolean;
+  /** Feet Y from the previous frame (for swept top-plane landing). */
+  prevFeetY: number;
 }
 
 export function sampleGroundHeight(
@@ -41,48 +46,65 @@ function headY(eyeY: number): number {
   return eyeY + PLAYER_HEAD_OFFSET;
 }
 
-function isCenterOverBox(px: number, pz: number, box: THREE.Box3): boolean {
+/** XZ circle overlaps the box footprint (player radius). */
+function overlapsXZ(px: number, pz: number, box: THREE.Box3): boolean {
+  const nearestX = THREE.MathUtils.clamp(px, box.min.x, box.max.x);
+  const nearestZ = THREE.MathUtils.clamp(pz, box.min.z, box.max.z);
+  const dx = px - nearestX;
+  const dz = pz - nearestZ;
+  return dx * dx + dz * dz <= PLAYER_RADIUS * PLAYER_RADIUS;
+}
+
+/** Eye is roughly over the box top (for intentional landings). */
+function isOverBoxTop(px: number, pz: number, box: THREE.Box3): boolean {
   return px >= box.min.x && px <= box.max.x && pz >= box.min.z && pz <= box.max.z;
 }
 
-function isOverFloor(px: number, pz: number, box: THREE.Box3): boolean {
-  return (
-    px >= box.min.x - FLOOR_MARGIN &&
-    px <= box.max.x + FLOOR_MARGIN &&
-    pz >= box.min.z - FLOOR_MARGIN &&
-    pz <= box.max.z + FLOOR_MARGIN
-  );
-}
-
 /**
- * Treat a box as a solid side wall when the capsule overlaps its vertical span
- * and the top is too high to step onto without vertical clearance.
+ * Block horizontal movement when the capsule intersects the box volume and
+ * the feet have not cleared the top lip. No step-height bypass — that caused
+ * passing through box sides mid-jump and erratic floor snaps.
  */
-function isSolidWall(eyeY: number, box: THREE.Box3): boolean {
+function blocksHorizontal(eyeY: number, box: THREE.Box3): boolean {
   const pFeet = feetY(eyeY);
   const pHead = headY(eyeY);
-  const stepToTop = box.max.y - pFeet;
-  return pHead > box.min.y && pFeet < box.max.y && stepToTop > MAX_STEP_HEIGHT;
+
+  if (pFeet >= box.max.y - 0.08) return false;
+  if (pHead <= box.min.y || pFeet >= box.max.y) return false;
+
+  return true;
 }
 
-/**
- * Push the eye position out of collidable side walls. Returns whether any wall was hit.
- */
 export function resolveWalls(
   eyePos: THREE.Vector3,
   collidables: THREE.Mesh[],
   horizontalMove?: { x: number; z: number },
+  floorCtx?: Pick<FloorContext, "canJump" | "velocityY">,
+  groundHeight = 0,
 ): boolean {
   if (collidables.length === 0) return false;
 
   let hitWall = false;
+  const pFeet = feetY(eyePos.y);
+  const onTerrain = pFeet <= groundHeight + 0.2;
+  const groundedWalk =
+    floorCtx !== undefined &&
+    onTerrain &&
+    floorCtx.canJump &&
+    floorCtx.velocityY <= 0;
 
   for (let iter = 0; iter < 3; iter++) {
     let anyHit = false;
 
     for (const mesh of collidables) {
       const box = _box.setFromObject(mesh);
-      if (!isSolidWall(eyePos.y, box)) continue;
+      const stepToTop = box.max.y - pFeet;
+
+      if (groundedWalk && stepToTop > 0 && stepToTop <= MAX_STEP_HEIGHT) {
+        continue;
+      }
+
+      if (!blocksHorizontal(eyePos.y, box)) continue;
 
       const minX = box.min.x - PLAYER_RADIUS;
       const maxX = box.max.x + PLAYER_RADIUS;
@@ -128,90 +150,161 @@ export interface FloorResolveResult {
   velocityY: number;
   canJump: boolean;
   onSurface: boolean;
+  feetY: number;
+}
+
+interface BoxLandingCandidate {
+  topY: number;
+  priority: number;
 }
 
 /**
- * Land on box tops. No ceiling / head-bonk handling (no roofs in the game yet).
+ * Decide whether the player should snap onto a box top this frame.
  */
-export function resolveBoxFloors(
+function evaluateBoxLanding(
+  eyeY: number,
+  px: number,
+  pz: number,
+  box: THREE.Box3,
+  ctx: FloorContext,
+  groundHeight: number,
+): BoxLandingCandidate | null {
+  if (!overlapsXZ(px, pz, box)) return null;
+
+  const pFeet = feetY(eyeY);
+  const stepDown = pFeet - box.max.y;
+
+  // Already standing on or above this surface.
+  if (stepDown >= -0.05 && stepDown <= 0.12 && ctx.velocityY <= 0) {
+    return { topY: box.max.y, priority: box.max.y };
+  }
+
+  // Feet must be at or below the top plane to land (not jumping up through it).
+  if (stepDown > LAND_SNAP_TOLERANCE) return null;
+
+  const onTerrain = pFeet <= groundHeight + 0.2;
+  const falling = ctx.velocityY < 0;
+  const crossedTopPlane =
+    falling &&
+    ctx.prevFeetY >= box.max.y - 0.08 &&
+    pFeet <= box.max.y + 0.08;
+
+  // Walk/step onto a low platform from the ground.
+  if (onTerrain && ctx.velocityY <= 0 && box.max.y - groundHeight <= MAX_STEP_HEIGHT) {
+    const stepToTop = box.max.y - pFeet;
+    if (stepToTop > 0 && stepToTop <= MAX_STEP_HEIGHT) {
+      return { topY: box.max.y, priority: box.max.y };
+    }
+  }
+
+  // Mid-air: land only when falling through the top plane or grazing it closely.
+  if (!onTerrain && falling && isOverBoxTop(px, pz, box)) {
+    if (crossedTopPlane || (stepDown > -0.05 && stepDown <= LAND_SNAP_TOLERANCE)) {
+      return { topY: box.max.y, priority: box.max.y };
+    }
+  }
+
+  return null;
+}
+
+function resolveBoxFloors(
   eyePos: THREE.Vector3,
-  velocityY: number,
-  canJump: boolean,
+  ctx: FloorContext,
   collidables: THREE.Mesh[],
   groundHeight: number,
 ): FloorResolveResult {
-  if (collidables.length === 0) {
-    return { velocityY, canJump, onSurface: false };
-  }
-
-  const px = eyePos.x;
-  const pz = eyePos.z;
   const pFeet = feetY(eyePos.y);
-  const airborne = !canJump && pFeet > groundHeight + AIRBORNE_FEET_CLEARANCE;
-
-  let landed = false;
+  let best: BoxLandingCandidate | null = null;
 
   for (const mesh of collidables) {
     const box = _box.setFromObject(mesh);
-    const centerOver = isCenterOverBox(px, pz, box);
-    const overFloor = isOverFloor(px, pz, box);
-
-    if (!centerOver && !overFloor) continue;
-
-    const stepToTop = box.max.y - pFeet;
-    if (stepToTop <= 0) continue;
-
-    let shouldLand = false;
-    if (airborne) {
-      shouldLand =
-        velocityY < 0 &&
-        stepToTop <= LAND_SNAP_TOLERANCE &&
-        centerOver;
-    } else if (velocityY <= 0) {
-      shouldLand = stepToTop <= MAX_STEP_HEIGHT && overFloor;
-    }
-
-    if (shouldLand) {
-      eyePos.y = box.max.y + PLAYER_FEET_OFFSET;
-      velocityY = 0;
-      canJump = true;
-      landed = true;
+    const candidate = evaluateBoxLanding(
+      eyePos.y,
+      eyePos.x,
+      eyePos.z,
+      box,
+      ctx,
+      groundHeight,
+    );
+    if (candidate && (!best || candidate.priority > best.priority)) {
+      best = candidate;
     }
   }
 
-  return { velocityY, canJump, onSurface: landed };
+  if (!best) {
+    return {
+      velocityY: ctx.velocityY,
+      canJump: ctx.canJump,
+      onSurface: false,
+      feetY: pFeet,
+    };
+  }
+
+  eyePos.y = best.topY + PLAYER_FEET_OFFSET;
+  return {
+    velocityY: 0,
+    canJump: true,
+    onSurface: true,
+    feetY: best.topY,
+  };
 }
 
-/**
- * Follow uneven terrain when feet are at or near the ground surface.
- * Uses feet-relative height so mid-jump arcs are not pulled down.
- */
-export function applyTerrainFollow(
+function applyTerrainFollow(
   eyePos: THREE.Vector3,
   velocityY: number,
   canJump: boolean,
   groundHeight: number,
+  feetOnBox: boolean,
 ): FloorResolveResult {
   const pFeet = feetY(eyePos.y);
   const feetAboveGround = pFeet - groundHeight;
   const rising = !canJump && velocityY > 0.1;
 
-  if (feetAboveGround <= TERRAIN_STICK_FEET && velocityY <= 0 && !rising) {
+  if (
+    !feetOnBox &&
+    feetAboveGround <= TERRAIN_STICK_FEET &&
+    feetAboveGround >= -0.15 &&
+    velocityY <= 0 &&
+    !rising
+  ) {
     const targetY = groundHeight + PLAYER_EYE_HEIGHT;
     eyePos.y = THREE.MathUtils.lerp(eyePos.y, targetY, 0.25);
-    return { velocityY: 0, canJump: true, onSurface: true };
+    return {
+      velocityY: 0,
+      canJump: true,
+      onSurface: true,
+      feetY: groundHeight,
+    };
   }
 
-  return { velocityY, canJump, onSurface: false };
+  return { velocityY, canJump, onSurface: false, feetY: pFeet };
 }
 
-/**
- * Full vertical pass: box floors first, then terrain (only if not on a box).
- */
+/** Highest box top under the player that the feet are resting on. */
+function feetRestingOnBox(
+  px: number,
+  pz: number,
+  pFeet: number,
+  collidables: THREE.Mesh[],
+): number | null {
+  let top: number | null = null;
+
+  for (const mesh of collidables) {
+    const box = _box.setFromObject(mesh);
+    if (!overlapsXZ(px, pz, box)) continue;
+
+    const stepDown = pFeet - box.max.y;
+    if (stepDown >= -0.08 && stepDown <= 0.2) {
+      if (top === null || box.max.y > top) top = box.max.y;
+    }
+  }
+
+  return top;
+}
+
 export function resolveFloors(
   eyePos: THREE.Vector3,
-  velocityY: number,
-  canJump: boolean,
+  ctx: FloorContext,
   world: CollisionWorld,
   raycaster: THREE.Raycaster,
   rayOrigin: THREE.Vector3,
@@ -220,25 +313,34 @@ export function resolveFloors(
     ? sampleGroundHeight(world.groundMesh, eyePos.x, eyePos.z, raycaster, rayOrigin)
     : 0;
 
-  const boxResult = resolveBoxFloors(
-    eyePos,
-    velocityY,
-    canJump,
-    world.collidables,
-    groundHeight,
-  );
+  const boxResult = resolveBoxFloors(eyePos, ctx, world.collidables, groundHeight);
 
   if (boxResult.onSurface) {
     return boxResult;
   }
 
+  const pFeet = feetY(eyePos.y);
+  const boxSupport = feetRestingOnBox(
+    eyePos.x,
+    eyePos.z,
+    pFeet,
+    world.collidables,
+  );
+  const feetOnBox = boxSupport !== null && pFeet >= boxSupport - 0.1;
+
   if (world.groundMesh) {
-    return applyTerrainFollow(eyePos, boxResult.velocityY, boxResult.canJump, groundHeight);
+    return applyTerrainFollow(
+      eyePos,
+      boxResult.velocityY,
+      boxResult.canJump,
+      groundHeight,
+      feetOnBox,
+    );
   }
 
   if (eyePos.y < PLAYER_EYE_HEIGHT) {
     eyePos.y = PLAYER_EYE_HEIGHT;
-    return { velocityY: 0, canJump: true, onSurface: true };
+    return { velocityY: 0, canJump: true, onSurface: true, feetY: 0 };
   }
 
   return boxResult;
