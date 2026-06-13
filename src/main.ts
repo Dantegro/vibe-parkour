@@ -52,9 +52,12 @@ c.style.height = "100%";
 c.style.zIndex = "1";
 c.style.display = "block";
 
-const { scene, cube } = createWorld();
+const { scene, cube, collidables } = createWorld();
 
-const { camera, updateMovement, dispose: disposeControls } = initPlayerControls(renderer.domElement);
+const { camera, updateMovement, dispose: disposeControls } = initPlayerControls(
+  renderer.domElement,
+  collidables
+);
 
 let prevTime = performance.now();
 

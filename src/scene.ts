@@ -26,12 +26,15 @@ export function createWorld() {
   );
   scene.add(ground);
 
+  const collidables: THREE.Mesh[] = [];
+
   const cube = new THREE.Mesh(
     new THREE.BoxGeometry(6, 6, 6),
     new THREE.MeshLambertMaterial({ color: 0xff2222 }),
   );
   cube.position.set(3, 4, -12);
   scene.add(cube);
+  collidables.push(cube);
 
   for (let i = 0; i < 25; i++) {
     const b = new THREE.Mesh(
@@ -49,7 +52,8 @@ export function createWorld() {
       b.material.color.setHex(0xaaaa66 + ((Math.random() * 0x555555) | 0));
     }
     scene.add(b);
+    collidables.push(b);
   }
 
-  return { scene, cube };
+  return { scene, cube, collidables };
 }

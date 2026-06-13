@@ -8,7 +8,10 @@ export interface PlayerAPI {
   dispose: () => void;
 }
 
-export function initPlayerControls(domElement: HTMLElement): PlayerAPI {
+export function initPlayerControls(
+  domElement: HTMLElement,
+  collidables: THREE.Mesh[] = []
+): PlayerAPI {
   const camera = new THREE.PerspectiveCamera(
     75,
     window.innerWidth / window.innerHeight,
@@ -108,6 +111,51 @@ export function initPlayerControls(domElement: HTMLElement): PlayerAPI {
   const GRAVITY = 30;        // units per second squared
   const JUMP_VELOCITY = 12;  // initial upward speed on jump
 
+  // Simple horizontal collision resolution against static box colliders.
+  // Player is treated as a vertical cylinder (radius check on XZ only).
+  // We use axis-aligned bounding box expansion + minimal axis push for response.
+  // Called after horizontal movement so the player can't walk through walls/buildings.
+  function resolveCollisions() {
+    if (collidables.length === 0) return;
+
+    const playerRadius = 0.55; // tune: larger = thicker player body
+    const pos = camera.position;
+
+    // Multiple iterations help resolve corners/diagonal collisions better
+    for (let iter = 0; iter < 2; iter++) {
+      for (const mesh of collidables) {
+        const box = new THREE.Box3().setFromObject(mesh);
+
+        // Expand the box by the player radius (Minkowski sum with a point)
+        const minX = box.min.x - playerRadius;
+        const maxX = box.max.x + playerRadius;
+        const minZ = box.min.z - playerRadius;
+        const maxZ = box.max.z + playerRadius;
+
+        const x = pos.x;
+        const z = pos.z;
+
+        if (x > minX && x < maxX && z > minZ && z < maxZ) {
+          // Calculate penetration depths on each side
+          const penX1 = x - minX;
+          const penX2 = maxX - x;
+          const penZ1 = z - minZ;
+          const penZ2 = maxZ - z;
+
+          const pushX = penX1 < penX2 ? -penX1 : penX2;
+          const pushZ = penZ1 < penZ2 ? -penZ1 : penZ2;
+
+          // Push out along the axis with the smallest penetration (simple sliding)
+          if (Math.abs(pushX) < Math.abs(pushZ)) {
+            pos.x += pushX;
+          } else {
+            pos.z += pushZ;
+          }
+        }
+      }
+    }
+  }
+
   function updateMovement(delta: number) {
     if (!controls.isLocked) return;
 
@@ -128,6 +176,9 @@ export function initPlayerControls(domElement: HTMLElement): PlayerAPI {
       controls.moveRight(velocity.x);
       controls.moveForward(velocity.z);
     }
+
+    // Resolve collisions with buildings + red cube (horizontal only)
+    resolveCollisions();
 
     // --- Vertical movement (gravity + jumping) ---
     velocityY -= GRAVITY * delta;
