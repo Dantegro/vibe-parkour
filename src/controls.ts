@@ -118,6 +118,8 @@ export function initPlayerControls(
   const PLAYER_FEET_OFFSET = 2.85;  // camera (eye) is this far above the feet when standing
   const PLAYER_EYE_HEIGHT = 3.0;    // desired camera y above the terrain surface when "on ground"
   const WALL_FRICTION = 0.82;       // < 1.0 slows you down while scraping/sliding along walls
+  const MAX_STEP_HEIGHT = 1.8;      // max vertical step we allow "walking/jumping onto" without horizontal side block
+  const OVERHEAD_CLEARANCE = 0.5;   // underside must be this far above feet to count as a ceiling bonk
 
   // Raycaster for sampling the actual height of the uneven ground mesh
   const raycaster = new THREE.Raycaster();
@@ -149,8 +151,10 @@ export function initPlayerControls(
     const pHead = pos.y + PLAYER_HEAD_OFFSET;
     const pFeet = pos.y - PLAYER_FEET_OFFSET;
 
-    // Several iterations for stable corner / diagonal resolution
-    for (let iter = 0; iter < 4; iter++) {
+    // Several iterations for stable corner / diagonal resolution.
+    // We use *additive penetration correction* (not absolute snap to face)
+    // so corrections are small and don't feel like teleports.
+    for (let iter = 0; iter < 3; iter++) {
       let anyHit = false;
 
       for (const mesh of collidables) {
@@ -159,14 +163,18 @@ export function initPlayerControls(
         const boxMinY = box.min.y;
         const boxMaxY = box.max.y;
 
-        // Only collide horizontally with this box if the player's capsule
-        // vertically overlaps the box's height range (i.e. the box is acting
-        // as a side wall at the player's current height).
-        // This is the key fix for being able to jump over short boxes:
-        // once your feet clear the top of a short box, horizontal side
-        // collision with it is disabled so your XZ can pass over it.
-        if (pHead <= boxMinY || pFeet >= boxMaxY) {
-          continue;
+        // Only treat this box as a solid side wall (block horizontal) if:
+        // - Capsule overlaps box Y, AND
+        // - The top is more than MAX_STEP_HEIGHT above current feet (i.e. not a steppable platform).
+        // For short boxes, when close and jumping, once stepToTop <= MAX_STEP_HEIGHT,
+        // we allow the XZ to move over the box area. Vertical floor logic will then
+        // lift the player onto the top. This prevents the "hit wall mid-jump -> teleport back"
+        // when starting right against the edge.
+        const stepToTop = boxMaxY - pFeet;
+        if (pHead > boxMinY && pFeet < boxMaxY && stepToTop > MAX_STEP_HEIGHT) {
+          // solid wall - do push below
+        } else {
+          continue; // either no overlap or steppable/short enough to allow horizontal progress
         }
 
         const minX = box.min.x - PLAYER_RADIUS;
@@ -181,20 +189,21 @@ export function initPlayerControls(
           anyHit = true;
           hitWall = true;
 
-          // Find smallest penetration axis and snap to the surface
+          // Penetration amounts on each side
           const penX1 = x - minX;
           const penX2 = maxX - x;
           const penZ1 = z - minZ;
           const penZ2 = maxZ - z;
 
+          // Smallest penetration direction → push only that amount (gentle)
           if (penX1 < penX2 && penX1 < penZ1 && penX1 < penZ2) {
-            pos.x = minX;               // hit left face
+            pos.x += -penX1;   // push left
           } else if (penX2 < penX1 && penX2 < penZ1 && penX2 < penZ2) {
-            pos.x = maxX;               // hit right face
+            pos.x += penX2;    // push right
           } else if (penZ1 < penX1 && penZ1 < penX2 && penZ1 < penZ2) {
-            pos.z = minZ;               // hit "near" face
+            pos.z += -penZ1;   // push "near"
           } else {
-            pos.z = maxZ;               // hit "far" face
+            pos.z += penZ2;    // push "far"
           }
         }
       }
@@ -203,7 +212,6 @@ export function initPlayerControls(
     }
 
     // Friction along walls: damp the current frame's movement scalars when in contact.
-    // This gives a "scraping" / resistance feel while still allowing you to slide.
     if (hitWall) {
       velocity.x *= WALL_FRICTION;
       velocity.z *= WALL_FRICTION;
@@ -237,8 +245,11 @@ export function initPlayerControls(
 
       if (overFloor || centerOver) {
 
-        // Head bonk (hitting the underside of an object while moving upward)
-        if (velocityY > 0 && headY > box.min.y && centerOver) {
+        // Head bonk (hitting the underside of an overhead object while moving upward).
+        // Ground-level boxes have box.min.y near the feet — skip those so jump-overs don't
+        // snap to the ground (box.min.y - head offset).
+        const isOverhead = box.min.y > feetY + OVERHEAD_CLEARANCE;
+        if (velocityY > 0 && centerOver && isOverhead && headY >= box.min.y) {
           camera.position.y = box.min.y - PLAYER_HEAD_OFFSET;
           velocityY = 0; // stop upward momentum (head bonk)
         }
@@ -288,6 +299,13 @@ export function initPlayerControls(
     // Vertical capsule: ceiling bonks + standing on top of low objects (buildings / red cube)
     resolveVerticalCollisions();
 
+    // Re-resolve horizontal *after* vertical.
+    // This is important for jumping onto short boxes:
+    // once vertical has lifted you (feet now above box top), the Y-overlap
+    // condition in horizontal will skip that box, preventing it from
+    // pushing you back out after a successful landing.
+    resolveHorizontalCollisions();
+
     // React to the actual uneven ground height (raycast sample).
     // This makes the camera follow hills and valleys instead of staying at fixed y=3.
     // We only "stick" to ground when close to it or falling (respects jumps).
@@ -305,7 +323,7 @@ export function initPlayerControls(
         // Lerp for smoothness instead of hard snap every frame.
         // Higher lerp factor = snappier response to slopes.
         // Lower = smoother / floatier but can lag on steep changes.
-        camera.position.y = THREE.MathUtils.lerp(currentY, targetY, 0.35);
+        camera.position.y = THREE.MathUtils.lerp(currentY, targetY, 0.25); // smoother follow on uneven ground
 
         if (velocityY < 0) velocityY = 0;
         canJump = true;
