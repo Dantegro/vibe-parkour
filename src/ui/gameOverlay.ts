@@ -14,7 +14,9 @@ export function buildGameStartOverlay(onExitToMenu?: () => void): GameStartOverl
   const overlay = document.createElement("div");
   overlay.className = "game-start-overlay";
   overlay.style.cssText =
-    "position:fixed;inset:0;display:grid;place-items:center;color:#ccc;font-family:sans-serif;text-align:center;z-index:10;background:linear-gradient(rgba(0,0,0,0.12),rgba(0,0,0,0.2));user-select:none;cursor:pointer;border:none;padding:0;margin:0;width:100%;";
+    "position:fixed;inset:0;place-items:center;color:#ccc;font-family:sans-serif;text-align:center;z-index:10;background:linear-gradient(rgba(0,0,0,0.12),rgba(0,0,0,0.2));user-select:none;cursor:pointer;border:none;padding:0;margin:0;width:100%;";
+  // Start hidden; show() is called explicitly by lock/unlock handlers or initial entry logic
+  overlay.style.display = "none";
 
   const content = document.createElement("div");
 

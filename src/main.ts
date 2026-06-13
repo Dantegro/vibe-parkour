@@ -113,6 +113,18 @@ function startGame() {
   c.removeAttribute("aria-hidden");
   prevTime = performance.now();
   animate();
+
+  // Immediately enter the game on first start from the menu (auto lock + fullscreen).
+  // The pause/resume overlay is kept hidden initially so the player drops straight into gameplay.
+  // The overlay will only appear later when the player presses ESC during play.
+  (async () => {
+    try {
+      await document.documentElement.requestFullscreen();
+    } catch {
+      // Fullscreen denied — still attempt pointer lock.
+    }
+    playerAPI.controls.lock();
+  })();
 }
 
 function exitToMenu() {
