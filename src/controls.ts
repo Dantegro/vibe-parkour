@@ -38,7 +38,6 @@ export function initPlayerControls(
   );
   lookCamera.position.set(0, 3, 2);
   lookCamera.lookAt(0, 2.5, -12);
-  const initialCameraQuaternion = lookCamera.quaternion.clone();
 
   const renderCamera = new THREE.PerspectiveCamera(
     75,
@@ -69,7 +68,6 @@ export function initPlayerControls(
     startOverlay.hide();
     controls.enabled = true;
     controls.pointerSpeed = 1;
-    lookCamera.quaternion.copy(initialCameraQuaternion);
   });
 
   controls.addEventListener("unlock", () => {
