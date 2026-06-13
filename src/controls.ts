@@ -120,6 +120,7 @@ export function initPlayerControls(
   const WALL_FRICTION = 0.82;       // < 1.0 slows you down while scraping/sliding along walls
   const MAX_STEP_HEIGHT = 1.8;      // max vertical step we allow "walking/jumping onto" without horizontal side block
   const OVERHEAD_CLEARANCE = 0.5;   // underside must be this far above feet to count as a ceiling bonk
+  const LAND_SNAP_TOLERANCE = 0.3;  // mid-air: feet must be within this of box top to land (not vacuum from below)
 
   // Raycaster for sampling the actual height of the uneven ground mesh
   const raycaster = new THREE.Raycaster();
@@ -254,11 +255,30 @@ export function initPlayerControls(
           velocityY = 0; // stop upward momentum (head bonk)
         }
 
-        // Feet / standing on top of an object while falling
-        if (velocityY <= 0 && feetY < box.max.y && overFloor) {
-          camera.position.y = box.max.y + PLAYER_FEET_OFFSET;
-          velocityY = 0;
-          canJump = true;
+        // Feet / standing on top of an object while falling.
+        // On the ground: allow step-up within MAX_STEP_HEIGHT (walk/jump onto low platforms).
+        // Mid-air: only snap when actually falling and feet are at the lip — not when
+        // jumping over with the body still clearly below the top surface.
+        const stepToTop = box.max.y - feetY;
+        if (stepToTop > 0) {
+          const groundH = getGroundHeight(px, pz);
+          const airborne = !canJump && feetY > groundH + 0.35;
+
+          let shouldLand = false;
+          if (airborne) {
+            shouldLand =
+              velocityY < 0 &&
+              stepToTop <= LAND_SNAP_TOLERANCE &&
+              centerOver;
+          } else if (velocityY <= 0) {
+            shouldLand = stepToTop <= MAX_STEP_HEIGHT;
+          }
+
+          if (shouldLand) {
+            camera.position.y = box.max.y + PLAYER_FEET_OFFSET;
+            velocityY = 0;
+            canJump = true;
+          }
         }
       }
     }
