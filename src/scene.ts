@@ -22,9 +22,31 @@ export function createWorld() {
   gpos.needsUpdate = true;
   groundGeo.computeVertexNormals();
 
+  // Add vertex colors based on height for "color depth".
+  // More vibrant, saturated pure greens (less yellow/earthy tones that read as sand/dirt).
+  // Low areas: deep lush green. High areas: bright vibrant grass. Feels more natural and appealing.
+  const colors: number[] = [];
+  let minY = Infinity;
+  let maxY = -Infinity;
+  for (let i = 0; i < gpos.count; i++) {
+    const y = gpos.getY(i);
+    if (y < minY) minY = y;
+    if (y > maxY) maxY = y;
+  }
+  const lowColor = new THREE.Color(0x2e6b3e);   // deep rich vibrant green (lush, not sandy)
+  const highColor = new THREE.Color(0x5fc85f);  // bright fresh vibrant grass green
+  for (let i = 0; i < gpos.count; i++) {
+    const y = gpos.getY(i);
+    const t = (y - minY) / (maxY - minY || 1);
+    // Bias a bit toward the vibrant high end for lively feel overall
+    const c = lowColor.clone().lerp(highColor, t * 0.75 + 0.25);
+    colors.push(c.r, c.g, c.b);
+  }
+  groundGeo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+
   const ground = new THREE.Mesh(
     groundGeo,
-    new THREE.MeshLambertMaterial({ color: 0x3a8a3a }),
+    new THREE.MeshLambertMaterial({ vertexColors: true }),
   );
   scene.add(ground);
 
