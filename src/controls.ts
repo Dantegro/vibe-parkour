@@ -133,6 +133,10 @@ export function initPlayerControls(
     rayOrigin,
   );
   movementState.prevFeetY = spawnGroundY;
+  movementState.smoothedGroundY = spawnGroundY;
+  movementState.onSurface = true;
+  movementState.prevEyeX = playerEyePos.x;
+  movementState.prevEyeZ = playerEyePos.z;
 
   // Visible player avatar. It becomes visible in third-person so you can see your own
   // character from behind. Hidden in normal first-person view.

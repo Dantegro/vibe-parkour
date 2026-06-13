@@ -7,8 +7,10 @@ import {
   PLAYER_FEET_OFFSET,
   PLAYER_HEAD_OFFSET,
   PLAYER_RADIUS,
+  TERRAIN_GROUND_SMOOTH_TAU_DOWN,
+  TERRAIN_GROUND_SMOOTH_TAU_UP,
+  TERRAIN_MAX_SINK,
   TERRAIN_STICK_FEET,
-  TERRAIN_STICK_TAU,
   WALL_FRICTION,
 } from "./constants.js";
 
@@ -25,6 +27,11 @@ export interface FloorContext {
   canJump: boolean;
   /** Feet Y from the previous frame (for swept top-plane landing). */
   prevFeetY: number;
+  /** Low-pass filtered terrain feet height carried across frames. */
+  smoothedGroundY: number;
+  /** Previous-frame eye XZ for spatial ground sampling (damps mesh-edge pops). */
+  prevEyeX: number;
+  prevEyeZ: number;
 }
 
 export function sampleGroundHeight(
@@ -38,6 +45,44 @@ export function sampleGroundHeight(
   raycaster.set(rayOrigin, _down);
   const hits = raycaster.intersectObject(groundMesh, false);
   return hits.length > 0 ? hits[0].point.y : 0;
+}
+
+/**
+ * Sample terrain height with light spatial averaging between the current XZ and the
+ * midpoint from the previous frame. Reduces pops when sprinting across triangle edges.
+ */
+function sampleTerrainHeight(
+  groundMesh: THREE.Mesh,
+  x: number,
+  z: number,
+  prevX: number,
+  prevZ: number,
+  raycaster: THREE.Raycaster,
+  rayOrigin: THREE.Vector3,
+): number {
+  const h = sampleGroundHeight(groundMesh, x, z, raycaster, rayOrigin);
+  const moved = Math.hypot(x - prevX, z - prevZ);
+  if (moved < 0.02) return h;
+
+  const mx = (x + prevX) * 0.5;
+  const mz = (z + prevZ) * 0.5;
+  const hm = sampleGroundHeight(groundMesh, mx, mz, raycaster, rayOrigin);
+  return h * 0.65 + hm * 0.35;
+}
+
+function smoothGroundHeight(
+  smoothed: number,
+  target: number,
+  delta: number,
+): number {
+  const rising = target > smoothed;
+  const tau = rising ? TERRAIN_GROUND_SMOOTH_TAU_UP : TERRAIN_GROUND_SMOOTH_TAU_DOWN;
+  const alpha = delta > 0 ? 1 - Math.exp(-delta / tau) : 0.25;
+  let next = smoothed + (target - smoothed) * alpha;
+  if (rising) {
+    next = Math.max(next, target - TERRAIN_MAX_SINK);
+  }
+  return next;
 }
 
 /** Place the camera at standing height over sampled terrain at its current XZ. */
@@ -74,6 +119,7 @@ function recoverFromTerrainPenetration(
     canJump: true,
     onSurface: true,
     feetY: groundHeight,
+    smoothedGroundY: groundHeight,
   };
 }
 
@@ -181,6 +227,7 @@ export interface FloorResolveResult {
   canJump: boolean;
   onSurface: boolean;
   feetY: number;
+  smoothedGroundY: number;
 }
 
 interface BoxLandingCandidate {
@@ -281,6 +328,7 @@ function resolveBoxFloors(
       canJump: ctx.canJump,
       onSurface: false,
       feetY: pFeet,
+      smoothedGroundY: ctx.smoothedGroundY,
     };
   }
 
@@ -290,6 +338,7 @@ function resolveBoxFloors(
     canJump: true,
     onSurface: true,
     feetY: best.topY,
+    smoothedGroundY: best.topY,
   };
 }
 
@@ -299,7 +348,8 @@ function applyTerrainFollow(
   canJump: boolean,
   groundHeight: number,
   feetOnBox: boolean,
-  delta: number = 0,
+  delta: number,
+  smoothedGroundY: number,
 ): FloorResolveResult {
   const pFeet = feetY(eyePos.y);
   const feetAboveGround = pFeet - groundHeight;
@@ -312,22 +362,24 @@ function applyTerrainFollow(
     velocityY <= 0 &&
     !rising
   ) {
-    const targetY = groundHeight + PLAYER_EYE_HEIGHT;
-    // Use delta-based exponential lerp for consistent smooth follow (no more fixed 0.25
-    // per frame which could feel jittery or variable with fps/speed changes on landing).
-    const stickAlpha = delta > 0
-      ? (1 - Math.exp(-delta / TERRAIN_STICK_TAU))
-      : 0.25;
-    eyePos.y = THREE.MathUtils.lerp(eyePos.y, targetY, stickAlpha);
+    const nextGroundY = smoothGroundHeight(smoothedGroundY, groundHeight, delta);
+    eyePos.y = nextGroundY + PLAYER_EYE_HEIGHT;
     return {
       velocityY: 0,
       canJump: true,
       onSurface: true,
-      feetY: groundHeight,
+      feetY: nextGroundY,
+      smoothedGroundY: nextGroundY,
     };
   }
 
-  return { velocityY, canJump, onSurface: false, feetY: pFeet };
+  return {
+    velocityY,
+    canJump,
+    onSurface: false,
+    feetY: pFeet,
+    smoothedGroundY,
+  };
 }
 
 /** Highest box top under the player that the feet are resting on. */
@@ -361,7 +413,15 @@ export function resolveFloors(
   delta: number = 0,
 ): FloorResolveResult {
   const groundHeight = world.groundMesh
-    ? sampleGroundHeight(world.groundMesh, eyePos.x, eyePos.z, raycaster, rayOrigin)
+    ? sampleTerrainHeight(
+        world.groundMesh,
+        eyePos.x,
+        eyePos.z,
+        ctx.prevEyeX,
+        ctx.prevEyeZ,
+        raycaster,
+        rayOrigin,
+      )
     : 0;
 
   const pFeet = feetY(eyePos.y);
@@ -399,12 +459,19 @@ export function resolveFloors(
       groundHeight,
       feetOnBoxAfter,
       delta,
+      ctx.smoothedGroundY,
     );
   }
 
   if (eyePos.y < PLAYER_EYE_HEIGHT) {
     eyePos.y = PLAYER_EYE_HEIGHT;
-    return { velocityY: 0, canJump: true, onSurface: true, feetY: 0 };
+    return {
+      velocityY: 0,
+      canJump: true,
+      onSurface: true,
+      feetY: 0,
+      smoothedGroundY: 0,
+    };
   }
 
   return boxResult;

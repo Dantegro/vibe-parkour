@@ -67,6 +67,9 @@ describe("resolveFloors", () => {
         velocityY: -5,
         canJump: false,
         prevFeetY: 3.5,
+        smoothedGroundY: 0,
+        prevEyeX: 0,
+        prevEyeZ: 0,
       },
       world,
       raycaster,
@@ -93,6 +96,9 @@ describe("resolveFloors", () => {
         velocityY: -8,
         canJump: false,
         prevFeetY: 2.55,
+        smoothedGroundY: 0,
+        prevEyeX: 1.42,
+        prevEyeZ: 0,
       },
       world,
       raycaster,
@@ -101,5 +107,77 @@ describe("resolveFloors", () => {
 
     expect(result.onSurface).toBe(true);
     expect(eyePos.y).toBeCloseTo(2 + 2.85, 2);
+  });
+
+  it("smoothly follows uneven terrain instead of snapping eye Y each frame", async () => {
+    const { resolveFloors, sampleGroundHeight } = await import("./collision.js");
+    const groundGeo = new THREE.PlaneGeometry(10, 10, 4, 4);
+    groundGeo.rotateX(-Math.PI / 2);
+    const pos = groundGeo.attributes.position;
+    for (let i = 0; i < pos.count; i++) {
+      const x = pos.getX(i);
+      pos.setY(i, pos.getY(i) + x * 0.35);
+    }
+    pos.needsUpdate = true;
+    groundGeo.computeVertexNormals();
+    const ground = new THREE.Mesh(groundGeo);
+    ground.updateMatrixWorld(true);
+
+    const world: CollisionWorld = { collidables: [], groundMesh: ground };
+    const raycaster = new THREE.Raycaster();
+    const rayOrigin = new THREE.Vector3();
+    const delta = 1 / 60;
+    const startX = -2;
+    const endX = 2;
+    const z = 0;
+
+    const startGround = sampleGroundHeight(ground, startX, z, raycaster, rayOrigin);
+    const endGround = sampleGroundHeight(ground, endX, z, raycaster, rayOrigin);
+    expect(endGround).toBeGreaterThan(startGround + 0.2);
+
+    const eyePos = new THREE.Vector3(startX, startGround + PLAYER_EYE_HEIGHT, z);
+    const first = resolveFloors(
+      eyePos,
+      {
+        velocityY: 0,
+        canJump: true,
+        prevFeetY: startGround,
+        smoothedGroundY: startGround,
+        prevEyeX: startX,
+        prevEyeZ: z,
+      },
+      world,
+      raycaster,
+      rayOrigin,
+      delta,
+    );
+    expect(first.onSurface).toBe(true);
+
+    eyePos.x = endX;
+    const beforeY = eyePos.y;
+    const second = resolveFloors(
+      eyePos,
+      {
+        velocityY: 0,
+        canJump: true,
+        prevFeetY: first.feetY,
+        smoothedGroundY: first.smoothedGroundY,
+        prevEyeX: startX,
+        prevEyeZ: z,
+      },
+      world,
+      raycaster,
+      rayOrigin,
+      delta,
+    );
+
+    expect(second.onSurface).toBe(true);
+    const rawTargetY = endGround + PLAYER_EYE_HEIGHT;
+    const actualRise = eyePos.y - beforeY;
+    const rawRise = rawTargetY - beforeY;
+    expect(actualRise).toBeGreaterThan(0);
+    expect(actualRise).toBeLessThan(rawRise);
+    expect(second.smoothedGroundY).toBeGreaterThan(startGround);
+    expect(second.smoothedGroundY).toBeLessThan(endGround);
   });
 });

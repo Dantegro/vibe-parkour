@@ -24,6 +24,12 @@ export interface MovementState {
   velocityY: number;
   canJump: boolean;
   prevFeetY: number;
+  /** True when the player was on a walkable surface last frame (terrain or box top). */
+  onSurface: boolean;
+  /** Low-pass filtered terrain feet height for smooth Y follow on uneven ground. */
+  smoothedGroundY: number;
+  prevEyeX: number;
+  prevEyeZ: number;
   /** Current (ramped) horizontal speed actually used this frame. */
   currentSpeed: number;
   /** 0..STAMINA_MAX. Drains while sprinting on ground; regens otherwise. */
@@ -42,6 +48,10 @@ export function createMovementState(): MovementState {
     velocityY: 0,
     canJump: true,
     prevFeetY: 0,
+    onSurface: false,
+    smoothedGroundY: 0,
+    prevEyeX: 0,
+    prevEyeZ: 0,
     currentSpeed: 0,
     stamina: STAMINA_MAX,
   };
@@ -119,13 +129,22 @@ export function updatePlayerMovement(
 
   resolveWalls(playerEye, world.collidables, horizontalMove);
 
-  state.velocityY -= GRAVITY * delta;
-  playerEye.y += state.velocityY * delta;
+  // Skip gravity while grounded at rest — applying it every frame then correcting in
+  // terrain follow caused micro-bobbing/jitter on uneven ground. Still integrate when
+  // airborne or when a jump impulse was applied this frame (velocityY > 0).
+  const integrateVertical = !state.onSurface || state.velocityY !== 0;
+  if (integrateVertical) {
+    state.velocityY -= GRAVITY * delta;
+    playerEye.y += state.velocityY * delta;
+  }
 
   const floorCtx: FloorContext = {
     velocityY: state.velocityY,
     canJump: state.canJump,
     prevFeetY: state.prevFeetY,
+    smoothedGroundY: state.smoothedGroundY,
+    prevEyeX: state.prevEyeX,
+    prevEyeZ: state.prevEyeZ,
   };
 
   const floor = resolveFloors(
@@ -138,6 +157,8 @@ export function updatePlayerMovement(
   );
   state.velocityY = floor.velocityY;
   state.canJump = floor.canJump;
+  state.onSurface = floor.onSurface;
+  state.smoothedGroundY = floor.smoothedGroundY;
 
   resolveWalls(playerEye, world.collidables);
 
@@ -163,4 +184,6 @@ export function updatePlayerMovement(
   }
 
   state.prevFeetY = playerEye.y - PLAYER_FEET_OFFSET;
+  state.prevEyeX = playerEye.x;
+  state.prevEyeZ = playerEye.z;
 }

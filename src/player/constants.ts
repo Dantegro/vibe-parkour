@@ -40,9 +40,14 @@ export const BOX_TOP_LAND_MARGIN = 0.13;
 /** Feet within this of terrain surface → follow ground height. */
 export const TERRAIN_STICK_FEET = 0.25;
 
-/** Time constant for smooth (delta-based) terrain following instead of the old fixed 0.25 per-frame lerp.
- *  Makes landing and ground stick feel consistent and less jittery across frame rates and speeds. */
-export const TERRAIN_STICK_TAU = 0.12;
+/** Low-pass time constants for smoothed ground height (feet Y), not eye Y directly.
+ *  Uphill uses a faster tau so the camera does not sink into rises while sprinting;
+ *  downhill uses a slower tau to damp triangle-edge pops on the procedural mesh. */
+export const TERRAIN_GROUND_SMOOTH_TAU_UP = 0.09;
+export const TERRAIN_GROUND_SMOOTH_TAU_DOWN = 0.24;
+
+/** Max allowed lag of smoothed ground below the sampled height when climbing (prevents visible foot sink). */
+export const TERRAIN_MAX_SINK = 0.1;
 
 /**
  * Third-person view (hold C) tuning and transition.
