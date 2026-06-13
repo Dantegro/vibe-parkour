@@ -112,16 +112,57 @@ menuStyle.textContent = `
     align-items: center;
     justify-content: space-between;
     user-select: none;
-    transition: background .08s ease, border-color .08s ease;
+    cursor: pointer;
+    position: relative;
+    overflow: hidden;
+    transition: transform 0.1s ease, background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
   }
-  .menu-entry.selected {
-    border-color: #55556a;
-    background: #1f1f28;
-    color: #e0e0e8;
+  .menu-entry::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 0;
+    background: linear-gradient(to bottom, #5a7a5a, #3a5a3a);
+    transition: width 0.22s ease;
+    z-index: 1;
+  }
+  .menu-entry.selecting {
+    animation: selectPop 0.38s cubic-bezier(0.2, 0.85, 0.25, 1);
+  }
+  @keyframes selectPop {
+    0%   { transform: scale(0.96); }
+    32%  { transform: scale(1.035); }
+    100% { transform: scale(1); }
   }
   .menu-entry:hover {
     background: #1f1f28;
     border-color: #5a5a66;
+  }
+  .menu-entry.selected {
+    border-color: #4a6a4a;
+    background: #1a221a;
+    color: #d8e0d8;
+    box-shadow: 0 0 0 1px rgba(70, 100, 70, 0.28) inset;
+  }
+  .menu-entry.selected::before {
+    width: 4px;
+  }
+  .menu-entry .mode-name {
+    position: relative;
+    z-index: 2;
+  }
+  .menu-entry .mode-status {
+    position: relative;
+    z-index: 2;
+    font-size: 10px;
+    letter-spacing: 0.5px;
+    opacity: 0.55;
+    transition: color 0.2s ease, opacity 0.2s ease;
+  }
+  .menu-entry.selected .mode-status {
+    opacity: 0.95;
   }
   #menu-start-btn {
     margin-top: 32px;
@@ -132,7 +173,7 @@ menuStyle.textContent = `
     color: #d0d0d8;
     border: 1px solid #464652;
     cursor: pointer;
-    transition: background .08s, border-color .08s, color .08s;
+    transition: background .08s, border-color .08s, color .08s, opacity .1s;
   }
   #menu-start-btn:hover {
     background: #24242e;
@@ -141,6 +182,18 @@ menuStyle.textContent = `
   }
   #menu-start-btn:active {
     transform: translateY(1px);
+  }
+  #menu-start-btn.disabled {
+    opacity: 0.38;
+    cursor: not-allowed;
+    border-color: #333338;
+    color: #888;
+    background: #16161c;
+  }
+  #menu-start-btn.disabled:hover {
+    background: #16161c;
+    border-color: #333338;
+    color: #888;
   }
 `;
 document.head.appendChild(menuStyle);
@@ -160,14 +213,28 @@ tagline.textContent = "PROTOTYPE";
 const gamesLabel = document.createElement("div");
 gamesLabel.style.cssText = "font-size:10px;letter-spacing:2px;opacity:0.45;margin-bottom:6px;";
 gamesLabel.textContent = "GAME MODES";
+gamesLabelEl = gamesLabel;
 
 const gameEntry = document.createElement("div");
-gameEntry.className = "menu-entry selected";
-gameEntry.innerHTML = `Open World<span style="font-size:11px;opacity:0.35;letter-spacing:1px;">EXPLORE</span>`;
+gameEntry.className = "menu-entry";
+
+const modeName = document.createElement("span");
+modeName.className = "mode-name";
+modeName.textContent = "Open World";
+
+const modeStatus = document.createElement("span");
+modeStatus.className = "mode-status";
+modeStatus.textContent = "SELECT";
+
+gameEntry.append(modeName, modeStatus);
+gameEntryEl = gameEntry;
 
 const startBtn = document.createElement("button");
 startBtn.id = "menu-start-btn";
 startBtn.textContent = "START GAME";
+startBtn.disabled = true;
+startBtn.classList.add('disabled');
+startBtnEl = startBtn;
 
 const hint = document.createElement("div");
 hint.style.cssText = "margin-top:14px;font-size:10px;opacity:0.35;";
@@ -176,8 +243,33 @@ hint.textContent = "Press START GAME (or Enter) to begin • WASD + mouse after 
 menu.append(title, tagline, gamesLabel, gameEntry, startBtn, hint);
 document.body.appendChild(menu);
 
-// Start the game only by pressing the START GAME button (Enter also works as a keyboard shortcut).
-// The game mode entry is display-only; clicking it does not start the game.
+// Selection on the game mode entry:
+// - Plays a pop/scale animation
+// - Slides in a left accent bar
+// - Updates status to "✓ SELECTED" with color shift
+// - Enables the START GAME button
+// The button (and Enter) are blocked until a mode is selected.
+gameEntry.addEventListener("click", () => {
+  selectedGameMode = 'open-world';
+  gameEntry.classList.add('selected');
+
+  const statusEl = gameEntry.querySelector('.mode-status') as HTMLSpanElement | null;
+  if (statusEl) {
+    statusEl.textContent = '✓ SELECTED';
+    statusEl.style.color = '#7a9a7a';
+  }
+
+  if (startBtnEl) {
+    startBtnEl.disabled = false;
+    startBtnEl.classList.remove('disabled');
+  }
+
+  // Trigger the actual selection animation
+  gameEntry.classList.add('selecting');
+  setTimeout(() => gameEntry.classList.remove('selecting'), 380);
+});
+
+// Only the START GAME button actually launches the game (after a mode has been selected).
 startBtn.addEventListener("click", startGame);
 
 window.addEventListener("keydown", (e) => {
