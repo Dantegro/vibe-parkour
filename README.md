@@ -2,7 +2,7 @@
 
 A browser-based **parkour / vibe** game — chill movement, lofi ambience, and procedural obstacles to climb. Built with **Three.js**, **TypeScript**, and **Vite**.
 
-Early prototype. Game modes and scope are still evolving.
+Early prototype. Game modes and scope are still evolving. Developed by me and my AI coding agents ツ.
 
 ## Play
 
@@ -68,12 +68,10 @@ src/
 public/       # static assets (sounds, icons)
 ```
 
-AI/coding-agent notes for contributors live in [AGENTS.md](./AGENTS.md).
-
 ## Status
 
-Active work-in-progress. Timed objectives, AI hunters, networking, and real art assets are not implemented yet. Expect rough edges — feedback and PRs welcome.
+Active work-in-progress. Expect some rough gameplay mechanics and UI for now — feedback and PRs welcome.
 
 ## License
 
-No license file yet. Assume all rights reserved unless one is added.
+No license file yet.
