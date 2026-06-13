@@ -8,6 +8,7 @@ import {
 import type { CollisionWorld } from "./player/collision.js";
 import { placePlayerOnGround } from "./player/collision.js";
 import { buildGameStartOverlay } from "./ui/gameOverlay.js";
+import { disposeMeshes } from "./disposeMeshes.js";
 import {
   createPlayerModel,
   stepThirdPersonTransition,
@@ -29,8 +30,6 @@ export function initPlayerControls(
   groundMesh?: THREE.Mesh,
   onExitToMenu?: () => void,
 ): PlayerAPI {
-  // lookCamera is the target for PointerLockControls. Mouse look only ever affects its quaternion.
-  // Its .position is unused. This is the source of the player's facing / movement direction at all times.
   const lookCamera = new THREE.PerspectiveCamera(
     75,
     window.innerWidth / window.innerHeight,
@@ -41,10 +40,6 @@ export function initPlayerControls(
   lookCamera.lookAt(0, 2.5, -12);
   const initialCameraQuaternion = lookCamera.quaternion.clone();
 
-  // renderCamera is the one actually used by the renderer and exposed on the API.
-  // We position + orient it every frame. Normally it sits at the eye (first-person).
-  // When the third-person key (C) is held we pull it back behind the player while
-  // keeping the free mouse look orientation.
   const renderCamera = new THREE.PerspectiveCamera(
     75,
     window.innerWidth / window.innerHeight,
@@ -91,10 +86,6 @@ export function initPlayerControls(
     if (controls.isLocked) {
       e.preventDefault();
       e.stopImmediatePropagation();
-
-      if (e.ctrlKey || e.metaKey || e.altKey) {
-        e.stopImmediatePropagation();
-      }
     }
   };
 
@@ -122,8 +113,6 @@ export function initPlayerControls(
 
   const world: CollisionWorld = { collidables, groundMesh };
 
-  // Logical player eye position (authoritative for movement + collision).
-  // The render camera is placed relative to this; the old "camera === eye" coupling is removed.
   const playerEyePos = new THREE.Vector3().copy(lookCamera.position);
 
   const spawnGroundY = placePlayerOnGround(
@@ -138,11 +127,7 @@ export function initPlayerControls(
   movementState.prevEyeX = playerEyePos.x;
   movementState.prevEyeZ = playerEyePos.z;
 
-  // Visible player avatar. It becomes visible in third-person so you can see your own
-  // character from behind. Hidden in normal first-person view.
   const playerModel = createPlayerModel();
-
-  // 0 = normal first-person, 1 = full third-person. Driven by holding the C key.
   let thirdPersonT = 0;
 
   function readInput(): MovementInput {
@@ -157,7 +142,6 @@ export function initPlayerControls(
   function updateMovement(delta: number) {
     const input = readInput();
 
-    // Movement + collision still operate exclusively on the logical player eye (decoupled from render camera).
     updatePlayerMovement(
       delta,
       playerEyePos,
@@ -170,12 +154,6 @@ export function initPlayerControls(
       controls.isLocked,
     );
 
-    // Hold C for third-person view.
-    // The render camera smoothly pulls back to a position behind the player (offset based on
-    // the current mouse look yaw + height). The camera orientation stays the free mouse look
-    // direction (same as first-person), so you control where you're looking while seeing your
-    // character running in that direction from behind. Movement direction follows the mouse
-    // (lookCamera quaternion). Releasing C smoothly returns the camera to the eye position.
     const holdingThirdPerson = !!keys["KeyC"];
     const targetT = holdingThirdPerson ? 1 : 0;
     thirdPersonT = stepThirdPersonTransition(thirdPersonT, targetT, delta);
@@ -197,18 +175,7 @@ export function initPlayerControls(
     window.removeEventListener("keyup", handleKeyUp);
     domElement.removeEventListener("contextmenu", handleContextMenu);
 
-    // Dispose the player model geometry/materials (main.ts is responsible for scene removal).
-    playerModel.traverse((child) => {
-      if (child instanceof THREE.Mesh) {
-        child.geometry.dispose();
-        const mat = child.material;
-        if (Array.isArray(mat)) {
-          for (const m of mat) m.dispose();
-        } else {
-          mat.dispose();
-        }
-      }
-    });
+    disposeMeshes(playerModel);
   }
 
   return {

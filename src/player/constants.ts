@@ -30,8 +30,6 @@ export const PLAYER_FEET_OFFSET = 2.85;
 export const PLAYER_EYE_HEIGHT = 3.0;
 
 export const WALL_FRICTION = 0.82;
-/** Max height for auto-step onto terrain; collidable tops always require a jump. */
-export const MAX_STEP_HEIGHT = 1.8;
 export const LAND_SNAP_TOLERANCE = 0.4;
 /** Extra XZ leeway when snapping onto a box top (lip / corner landings). */
 export const BOX_TOP_EDGE_GRACE = 0.27;
@@ -52,22 +50,9 @@ export const TERRAIN_GROUND_SMOOTH_TAU_DOWN = 0.24;
 /** Max allowed lag of smoothed ground below the sampled height when climbing (prevents visible foot sink). */
 export const TERRAIN_MAX_SINK = 0.1;
 
-/**
- * Third-person view (hold C) tuning and transition.
- * Camera position pulls back behind the player (offset based on current look yaw).
- * Camera orientation in third-person uses the same free look direction as first-person
- * (mouse-controlled), so you control where you're looking while the camera trails behind
- * and you can see your character running in that direction. This is a proper trailing
- * third-person camera (not a forced "stare at my own back" look-behind).
- */
-export const THIRD_PERSON_DISTANCE = 4.2;      // meters behind the player (horizontal)
-export const THIRD_PERSON_HEIGHT = 1.7;        // meters above the eye when in full third-person
-export const THIRD_PERSON_TRANSITION_TAU = 0.22; // seconds; exponential smoothing for the camera pull-back animation
-
-/** Time constant for light position (and quat) smoothing applied to the render camera *only during
- *  the active third-person transition* (when blend t is between ~3% and 97%). This damps L/R and
- *  other jitter from high-speed sprint + jumping/landing eye corrections while the blend amount
- *  is still changing (including the final asymptotic steps of the transition). Once the animation
- *  has practically completed, we switch to direct exact placement for responsive steady-state
- *  first-person or full third-person. */
+/** Third-person view tuning (hold C). */
+export const THIRD_PERSON_DISTANCE = 4.2;
+export const THIRD_PERSON_HEIGHT = 1.7;
+export const THIRD_PERSON_TRANSITION_TAU = 0.22;
+/** Low-pass smoothing during the FP↔TP camera blend. */
 export const THIRD_PERSON_POSITION_SMOOTH_TAU = 0.05;

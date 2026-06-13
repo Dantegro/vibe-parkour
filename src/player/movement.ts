@@ -78,30 +78,7 @@ export function updatePlayerMovement(
 ): void {
   if (!isLocked) return;
 
-  // Apply jump velocity *early* (if we could jump at the start of this frame, i.e. we were on a
-  // surface from the previous frame's resolves). This makes the positive velocityY affect *this
-  // frame's* y update and the two resolveWalls + resolveFloors calls.
-  //
-  // Previously the jump set was at the very end (after y+= and both wall/floor resolves). On a
-  // "jump off crate while sprinting" frame this meant:
-  //   - horizontal sprint move off the edge
-  //   - resolveWalls1 (eye still at landed y → pFeet near box.top → blocksHorizontal false, good)
-  //   - vely -= gravity*dt (small negative dip)
-  //   - eye.y += (small drop) → pFeet now < box.top - margin
-  //   - resolveFloors
-  //   - resolveWalls2 (now at lower y, still some XZ overlap → blocksHorizontal true → sudden
-  //     penetration push in X or Z by the pen amount)
-  //   - then (after resolves) if(jump) { vely = +JUMP; ... }
-  //
-  // The late resolveWalls2 push (or the timing of when "on top" vs "side" blocking flips) produced
-  // the visible small "instance" X jitter in the eye (and thus the camera, in both FP and 3P).
-  // It was most noticeable sprinting + jumping off because large per-frame horizontal deltas +
-  // the exact moment the vertical state + overlap made blocking re-activate.
-  //
-  // By setting vely positive early we rise (or at least don't dip) on the jump-off frame, keep
-  // pFeet high enough for blocksHorizontal to stay false during both wall resolves, and avoid the
-  // spurious correction. The late jump check (after floors) is left in place so same-frame
-  // "land this frame + jump" still works (using the canJump that floors just set).
+  // Apply jump before wall/floor resolves to avoid spurious wall push when sprint-jumping off edges.
   if (input.jump && state.canJump) {
     state.velocityY = JUMP_VELOCITY;
     state.canJump = false;
@@ -110,7 +87,6 @@ export function updatePlayerMovement(
   const horizontalMove = { x: 0, z: 0 };
   const moveLen = Math.hypot(input.strafe, input.forward);
 
-  // --- Sprint target + exponential ramp (momentum) ---
   const tryingToSprint =
     input.sprint &&
     !state.sprintExhausted &&
@@ -125,8 +101,7 @@ export function updatePlayerMovement(
     horizontalMove.x = input.strafe * inv * state.currentSpeed * delta;
     horizontalMove.z = input.forward * inv * state.currentSpeed * delta;
 
-    // Derive world-space horizontal directions from the current view quaternion (yaw primarily).
-    // Matches the previous PointerLockControls.moveRight/moveForward behavior for FP.
+    // Derive world-space horizontal directions from view yaw.
     _moveForward.set(0, 0, -1).applyQuaternion(viewQuat).setY(0).normalize();
     _moveRight.set(1, 0, 0).applyQuaternion(viewQuat).setY(0).normalize();
 
@@ -136,9 +111,7 @@ export function updatePlayerMovement(
 
   resolveWalls(playerEye, world.collidables, horizontalMove);
 
-  // Skip gravity while grounded at rest — applying it every frame then correcting in
-  // terrain follow caused micro-bobbing/jitter on uneven ground. Still integrate when
-  // airborne or when a jump impulse was applied this frame (velocityY > 0).
+  // Skip gravity while grounded at rest to avoid micro-bob on uneven terrain.
   const integrateVertical = !state.onSurface || state.velocityY !== 0;
   if (integrateVertical) {
     state.velocityY -= GRAVITY * delta;
@@ -176,7 +149,7 @@ export function updatePlayerMovement(
     state.canJump = false;
   }
 
-  // --- Stamina drain / regen (only drain while actually sprinting on the ground) ---
+  // Stamina drain/regen while sprinting on ground.
   const isMoving = moveLen > 0;
   const isSprintingNow = state.currentSpeed > WALK_SPEED * 1.05 && isMoving;
 
@@ -187,7 +160,7 @@ export function updatePlayerMovement(
     state.stamina = Math.min(STAMINA_MAX, state.stamina + STAMINA_REGEN_RATE * mult * delta);
   }
 
-  // Hysteresis: after depletion, stay forced to walk until stamina regens past the restore threshold.
+  // Hysteresis: after depletion, block sprint until stamina regens past the restore threshold.
   if (state.stamina <= 0) {
     state.sprintExhausted = true;
   } else if (state.sprintExhausted && state.stamina >= STAMINA_RESTORE_THRESHOLD) {

@@ -279,18 +279,7 @@ function evaluateBoxLanding(
     ctx.prevFeetY >= box.max.y - BOX_TOP_LAND_MARGIN &&
     pFeet <= box.max.y + BOX_TOP_LAND_MARGIN;
 
-  // Mid-air only — collidable tops never auto-step from grounded walk (prevents
-  // slope exploits where feet are already near box.max.y on elevated terrain).
-  //
-  // IMPORTANT: We only allow landing/snapping onto a box top from below without
-  // a "crossed this frame" if stepDown >= 0 (i.e. your trajectory actually brought
-  // your feet to or above the top plane this frame). The old allowance for
-  // stepDown slightly negative without crossed could pull the player *up* onto
-  // a crate top even when the jump arc was not high enough to reach it
-  // (especially combined with horizontal movement into the grace area in the
-  // same frame while falling past the height). This was causing the "teleport
-  // over the crate" and subsequent "back to ground" pops when the resting check
-  // failed on later frames, plus landing jitter.
+  // Mid-air only — require feet at/above top plane unless swept across it this frame.
   if (!onTerrain && falling) {
     if (
       crossedTopPlane ||
