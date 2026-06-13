@@ -1,5 +1,7 @@
 import * as THREE from "three";
 import {
+  BOX_TOP_EDGE_GRACE,
+  BOX_TOP_LAND_MARGIN,
   LAND_SNAP_TOLERANCE,
   MAX_STEP_HEIGHT,
   PLAYER_EYE_HEIGHT,
@@ -92,9 +94,15 @@ function overlapsXZ(px: number, pz: number, box: THREE.Box3): boolean {
   return dx * dx + dz * dz <= PLAYER_RADIUS * PLAYER_RADIUS;
 }
 
-/** Eye is roughly over the box top (for intentional landings). */
-function isOverBoxTop(px: number, pz: number, box: THREE.Box3): boolean {
-  return px >= box.min.x && px <= box.max.x && pz >= box.min.z && pz <= box.max.z;
+/** Eye XZ over the box top face, with a small edge grace for lip landings. */
+function isNearBoxTop(px: number, pz: number, box: THREE.Box3): boolean {
+  const g = BOX_TOP_EDGE_GRACE;
+  return (
+    px >= box.min.x - g &&
+    px <= box.max.x + g &&
+    pz >= box.min.z - g &&
+    pz <= box.max.z + g
+  );
 }
 
 /**
@@ -106,7 +114,7 @@ function blocksHorizontal(eyeY: number, box: THREE.Box3): boolean {
   const pFeet = feetY(eyeY);
   const pHead = headY(eyeY);
 
-  if (pFeet >= box.max.y - 0.08) return false;
+  if (pFeet >= box.max.y - BOX_TOP_LAND_MARGIN) return false;
   if (pHead <= box.min.y || pFeet >= box.max.y) return false;
 
   return true;
@@ -223,8 +231,8 @@ function evaluateBoxLanding(
   const falling = ctx.velocityY < 0;
   const crossedTopPlane =
     falling &&
-    ctx.prevFeetY >= box.max.y - 0.08 &&
-    pFeet <= box.max.y + 0.08;
+    ctx.prevFeetY >= box.max.y - BOX_TOP_LAND_MARGIN &&
+    pFeet <= box.max.y + BOX_TOP_LAND_MARGIN;
 
   // Walk/step onto a low platform from the ground.
   if (onTerrain && ctx.velocityY <= 0 && box.max.y - groundHeight <= MAX_STEP_HEIGHT) {
@@ -234,9 +242,12 @@ function evaluateBoxLanding(
     }
   }
 
-  // Mid-air: land only when falling through the top plane or grazing it closely.
-  if (!onTerrain && falling && isOverBoxTop(px, pz, box)) {
-    if (crossedTopPlane || (stepDown > -0.05 && stepDown <= LAND_SNAP_TOLERANCE)) {
+  // Mid-air: land when falling through the top plane or grazing the lip (edge grace).
+  if (!onTerrain && falling && isNearBoxTop(px, pz, box)) {
+    if (
+      crossedTopPlane ||
+      (stepDown > -BOX_TOP_LAND_MARGIN && stepDown <= LAND_SNAP_TOLERANCE)
+    ) {
       return { topY: box.max.y, priority: box.max.y };
     }
   }
