@@ -22,122 +22,27 @@ export interface MainMenuStyleHandle {
 export function injectMainMenuStyles(): MainMenuStyleHandle {
   const element = document.createElement("style");
   element.textContent = `
-  .menu-entry {
-    width: 320px;
-    padding: 14px 18px;
-    border: 1px solid #3d4460;
-    background: #181a28;
-    color: #c0c0c8;
-    font-size: 15px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    user-select: none;
-    cursor: pointer;
-    position: relative;
-    overflow: hidden;
-    transition: transform 0.1s ease, background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
-    font-family: inherit;
-    text-align: left;
-  }
-  .menu-entry::before {
-    content: '';
-    position: absolute;
-    left: 0;
-    top: 0;
-    bottom: 0;
-    width: 0;
-    background: linear-gradient(to bottom, #5a7a5a, #3a5a3a);
-    transition: width 0.22s ease;
-    z-index: 1;
-  }
-  .menu-entry.selecting {
-    animation: selectPop 0.38s cubic-bezier(0.2, 0.85, 0.25, 1);
-  }
-  @keyframes selectPop {
-    0%   { transform: scale(0.96); }
-    32%  { transform: scale(1.035); }
-    100% { transform: scale(1); }
-  }
-  .menu-entry:hover {
-    background: #222436;
-    border-color: #525a72;
-  }
-  .menu-entry.selected {
-    border-color: #4a6a4a;
-    background: #1a221a;
-    color: #d8e0d8;
-    box-shadow: 0 0 0 1px rgba(70, 100, 70, 0.28) inset;
-  }
-  .menu-entry.selected::before {
-    width: 4px;
-  }
-  .menu-entry .mode-name {
-    position: relative;
-    z-index: 2;
-  }
-  .menu-entry .mode-status {
-    position: relative;
-    z-index: 2;
-    font-size: 10px;
-    letter-spacing: 0.5px;
-    opacity: 0.55;
-    transition: color 0.2s ease, opacity 0.2s ease;
-  }
-  .menu-entry.selected .mode-status {
-    opacity: 0.95;
-  }
-  #menu-start-btn {
-    margin-top: 32px;
-    padding: 13px 52px;
-    font-size: 14px;
-    letter-spacing: 2px;
-    background: #1a1a22;
-    color: #d0d0d8;
-    border: 1px solid #464652;
-    cursor: pointer;
-    transition: background .08s, border-color .08s, color .08s, opacity .1s;
-  }
-  #menu-start-btn:hover {
-    background: #24242e;
-    border-color: #5f5f6e;
-    color: #f0f0f8;
-  }
-  #menu-start-btn:active {
-    transform: translateY(1px);
-  }
-  #menu-start-btn.disabled {
-    opacity: 0.38;
-    cursor: not-allowed;
-    border-color: #333338;
-    color: #888;
-    background: #16161c;
-  }
-  #menu-start-btn.disabled:hover {
-    background: #16161c;
-    border-color: #333338;
-    color: #888;
-  }
-  #map-regen-btn {
-    margin-top: 6px;
-    font-size: 9px;
-    padding: 3px 8px;
-    letter-spacing: 1px;
-    background: #1a1a22;
-    color: #aaa;
-    border: 1px solid #464652;
-    cursor: pointer;
-    transition: background .08s, color .08s;
-  }
-  #map-regen-btn:hover {
-    background: #24242e;
-    color: #ccc;
-  }
   #main-menu {
-    background:
-      radial-gradient(ellipse 70% 50% at 50% 18%, rgba(71, 191, 255, 0.14) 0%, transparent 55%),
-      radial-gradient(ellipse 55% 45% at 80% 85%, rgba(134, 59, 255, 0.1) 0%, transparent 50%),
-      linear-gradient(168deg, #1e2648 0%, #161d38 42%, #12182e 100%);
+    background: #141418;
+    color: #d4d4dc;
+    font-family: system-ui, -apple-system, sans-serif;
+    overflow-y: auto;
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
+  }
+  .menu-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    min-height: 100%;
+    box-sizing: border-box;
+    padding: 28px 24px 40px;
+    justify-content: center;
+  }
+  #main-menu.menu-expanded .menu-content {
+    justify-content: flex-start;
+    padding-top: 36px;
   }
   .menu-logo {
     width: 72px;
@@ -145,7 +50,6 @@ export function injectMainMenuStyles(): MainMenuStyleHandle {
     margin: 0 0 14px;
     display: block;
     animation: menuLogoFloat 4.2s ease-in-out infinite;
-    filter: drop-shadow(0 6px 20px rgba(134, 59, 255, 0.4));
   }
   @keyframes menuLogoFloat {
     0%, 100% { transform: translateY(0); }
@@ -155,6 +59,152 @@ export function injectMainMenuStyles(): MainMenuStyleHandle {
     .menu-logo {
       animation: none;
     }
+  }
+  .menu-title {
+    font-size: 36px;
+    font-weight: 600;
+    margin: 0 0 6px;
+    color: #eeeef2;
+  }
+  .menu-tagline {
+    font-size: 13px;
+    color: #888894;
+    margin: 0 0 40px;
+  }
+  .menu-section-label {
+    font-size: 12px;
+    font-weight: 500;
+    color: #888894;
+    margin-bottom: 8px;
+  }
+  .menu-entry {
+    width: 280px;
+    padding: 12px 14px;
+    border: 1px solid #3a3a44;
+    border-radius: 6px;
+    background: #1c1c22;
+    color: #d4d4dc;
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    user-select: none;
+    cursor: pointer;
+    font-family: inherit;
+    text-align: left;
+    transition: border-color 0.12s ease, background 0.12s ease;
+  }
+  .menu-entry:hover {
+    background: #222228;
+    border-color: #4a4a56;
+  }
+  .menu-entry.selected {
+    border-color: #6a8ab8;
+    background: #1e2430;
+  }
+  .menu-entry .mode-status {
+    font-size: 12px;
+    color: #888894;
+    flex-shrink: 0;
+  }
+  .menu-entry.selected .mode-status {
+    color: #8ab0d8;
+  }
+  .menu-preview-section {
+    margin: 16px 0 8px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+  .menu-preview-label {
+    font-size: 12px;
+    font-weight: 500;
+    color: #888894;
+    margin-bottom: 6px;
+  }
+  #map-preview {
+    width: 220px;
+    height: 220px;
+    border: 1px solid #3a3a44;
+    border-radius: 4px;
+    background: #0e0e12;
+    display: block;
+  }
+  #menu-start-btn {
+    margin-top: 24px;
+    padding: 10px 28px;
+    font-size: 14px;
+    font-weight: 500;
+    background: #2a4a7a;
+    color: #f0f4fa;
+    border: 1px solid #3a5a8a;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background 0.12s ease, opacity 0.12s ease;
+  }
+  #menu-start-btn:hover:not(.disabled) {
+    background: #345a8a;
+  }
+  #menu-start-btn:active:not(.disabled) {
+    background: #24406a;
+  }
+  #menu-start-btn.disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+    background: #2a2a32;
+    border-color: #3a3a44;
+    color: #888894;
+  }
+  #map-regen-btn {
+    margin-top: 8px;
+    font-size: 12px;
+    padding: 5px 10px;
+    background: transparent;
+    color: #a0a0ac;
+    border: 1px solid #3a3a44;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background 0.12s ease, color 0.12s ease;
+  }
+  #map-regen-btn:hover {
+    background: #222228;
+    color: #d4d4dc;
+  }
+  .menu-volume {
+    margin-top: 20px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+  }
+  .menu-volume-label {
+    font-size: 12px;
+    font-weight: 500;
+    color: #888894;
+  }
+  .menu-volume-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  #music-volume {
+    width: 140px;
+    accent-color: #5a7aaa;
+    cursor: pointer;
+  }
+  #music-volume-value {
+    font-size: 12px;
+    color: #888894;
+    width: 32px;
+    text-align: right;
+  }
+  .menu-hint {
+    margin: 16px 24px 0;
+    max-width: 360px;
+    font-size: 12px;
+    line-height: 1.5;
+    color: #686874;
   }
 `;
   document.head.appendChild(element);
@@ -199,7 +249,7 @@ export function buildGameStartButton(): HTMLButtonElement {
   const startBtn = document.createElement("button");
   startBtn.id = "menu-start-btn";
   startBtn.type = "button";
-  startBtn.textContent = "START GAME";
+  startBtn.textContent = "Start game";
   startBtn.disabled = true;
   startBtn.classList.add("disabled");
 
@@ -220,17 +270,16 @@ export function buildMusicVolumeControl(): {
   valueEl: HTMLSpanElement;
 } {
   const container = document.createElement("div");
-  container.style.cssText =
-    "margin-top:18px;display:flex;flex-direction:column;align-items:center;gap:3px;";
+  container.className = "menu-volume";
 
   const volumeLabel = document.createElement("label");
   volumeLabel.id = "music-volume-label";
+  volumeLabel.className = "menu-volume-label";
   volumeLabel.htmlFor = "music-volume";
-  volumeLabel.style.cssText = "font-size:9px;letter-spacing:1.5px;opacity:0.45;";
-  volumeLabel.textContent = "MUSIC VOLUME";
+  volumeLabel.textContent = "Music volume";
 
   const volumeRow = document.createElement("div");
-  volumeRow.style.cssText = "display:flex;align-items:center;gap:6px;";
+  volumeRow.className = "menu-volume-row";
 
   const slider = document.createElement("input");
   slider.type = "range";
@@ -238,7 +287,6 @@ export function buildMusicVolumeControl(): {
   slider.min = "0";
   slider.max = "1";
   slider.step = "0.01";
-  slider.style.cssText = "width:120px;accent-color:#4a6a4a;cursor:pointer;";
 
   applyA11y(slider, {
     "aria-labelledby": "music-volume-label",
@@ -250,7 +298,6 @@ export function buildMusicVolumeControl(): {
 
   const valueEl = document.createElement("span");
   valueEl.id = "music-volume-value";
-  valueEl.style.cssText = "font-size:10px;opacity:0.6;width:26px;text-align:right;";
   valueEl.setAttribute("aria-hidden", "true");
 
   volumeRow.append(slider, valueEl);
@@ -266,8 +313,10 @@ export function buildMainMenu(): MainMenuElements {
 
   const root = document.createElement("div");
   root.id = "main-menu";
-  root.style.cssText =
-    "position:fixed;inset:0;z-index:100;color:#c8c8d0;font-family:system-ui,-apple-system,sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;";
+  root.style.cssText = "position:fixed;inset:0;z-index:100;";
+
+  const content = document.createElement("div");
+  content.className = "menu-content";
 
   applyA11y(root, {
     role: "dialog",
@@ -286,20 +335,17 @@ export function buildMainMenu(): MainMenuElements {
 
   const title = document.createElement("h1");
   title.id = "menu-title";
-  title.style.cssText =
-    "font-size:48px;letter-spacing:5px;margin:0 0 2px;font-weight:normal;color:#e4e6f4;";
-  title.textContent = "VIBE PARKOUR";
+  title.className = "menu-title";
+  title.textContent = "Vibe Parkour";
 
   const tagline = document.createElement("p");
-  tagline.style.cssText =
-    "font-size:12px;letter-spacing:2.5px;opacity:0.4;margin:0 0 64px;";
-  tagline.textContent = "PROTOTYPE";
+  tagline.className = "menu-tagline";
+  tagline.textContent = "Early prototype";
 
   const gamesLabel = document.createElement("div");
   gamesLabel.id = "game-modes-label";
-  gamesLabel.style.cssText =
-    "font-size:10px;letter-spacing:2px;opacity:0.45;margin-bottom:6px;";
-  gamesLabel.textContent = "GAME MODES";
+  gamesLabel.className = "menu-section-label";
+  gamesLabel.textContent = "Game mode";
 
   const modeGroup = document.createElement("div");
   applyA11y(modeGroup, {
@@ -309,36 +355,30 @@ export function buildMainMenu(): MainMenuElements {
 
   const { button: gameModeOption, statusEl: gameModeStatus } = buildGameModeOption(
     "Open World",
-    "SELECT",
+    "",
   );
   modeGroup.appendChild(gameModeOption);
 
-  // Map preview (top-down orthographic view of the generated boxes) + regenerate control.
-  // Placed right after the mode selector so players can inspect layout before starting.
   const previewSection = document.createElement("div");
-  previewSection.style.cssText =
-    "margin:10px 0 4px;display:flex;flex-direction:column;align-items:center;";
+  previewSection.className = "menu-preview-section";
 
   const previewLabel = document.createElement("div");
-  previewLabel.style.cssText =
-    "font-size:9px;letter-spacing:1.5px;opacity:0.45;margin-bottom:4px;";
-  previewLabel.textContent = "MAP LAYOUT PREVIEW (TOP DOWN)";
+  previewLabel.className = "menu-preview-label";
+  previewLabel.textContent = "Map preview";
 
   const canvas = document.createElement("canvas");
   canvas.id = "map-preview";
-  canvas.style.cssText =
-    "width:240px;height:240px;border:1px solid #3a3a44;border-radius:2px;background:#111;display:block;";
 
   const regenerateButton = document.createElement("button");
   regenerateButton.id = "map-regen-btn";
   regenerateButton.type = "button";
-  regenerateButton.textContent = "REGENERATE LAYOUT";
+  regenerateButton.textContent = "Regenerate";
   applyA11y(regenerateButton, {
     "aria-label": "Regenerate the map layout preview",
   });
 
   previewSection.append(previewLabel, canvas, regenerateButton);
-  previewSection.style.display = 'none';  // only show after user selects a game mode
+  previewSection.style.display = "none";
 
   const startButton = buildGameStartButton();
   const { container: volumeContainer, slider: volumeSlider, valueEl: volumeValue } =
@@ -346,11 +386,12 @@ export function buildMainMenu(): MainMenuElements {
 
   const hint = document.createElement("p");
   hint.id = "menu-hint";
-  hint.style.cssText = "margin:14px 0 0;font-size:10px;opacity:0.35;";
+  hint.className = "menu-hint";
   hint.textContent =
-    "Select a game mode, then press START GAME or Enter to begin. Shift = sprint (stamina limited). M toggles music. WASD and mouse after lock. Regenerate if the preview layout looks bad.";
+    "Select a game mode, then start. Shift to sprint, M toggles music, Enter also starts.";
 
-  root.append(logo, title, tagline, gamesLabel, modeGroup, previewSection, startButton, volumeContainer, hint);
+  content.append(logo, title, tagline, gamesLabel, modeGroup, previewSection, startButton, volumeContainer, hint);
+  root.appendChild(content);
 
   function updateVolumeDisplay(volume: number): void {
     volumeSlider.value = volume.toString();
@@ -382,8 +423,11 @@ export function setGameModeSelected(
 ): void {
   option.classList.toggle("selected", selected);
   applyA11y(option, { "aria-checked": selected ? "true" : "false" });
-  statusEl.textContent = selected ? "✓ SELECTED" : "SELECT";
-  statusEl.style.color = selected ? "#7a9a7a" : "";
+  statusEl.textContent = selected ? "Selected" : "";
+}
+
+export function setMapPreviewVisible(root: HTMLDivElement, visible: boolean): void {
+  root.classList.toggle("menu-expanded", visible);
 }
 
 export function setStartButtonEnabled(button: HTMLButtonElement, enabled: boolean): void {

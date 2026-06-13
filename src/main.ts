@@ -13,6 +13,7 @@ import {
   buildMainMenu,
   injectMainMenuStyles,
   setGameModeSelected,
+  setMapPreviewVisible,
   setStartButtonEnabled,
 } from "./ui/mainMenu.js";
 
@@ -71,19 +72,7 @@ previewRenderer.setSize(PREVIEW_SIZE, PREVIEW_SIZE);
 
 function startGame() {
   if (!selectedGameMode) {
-    // Visually prompt the user to select a game mode first
-    if (mainMenu.gameModeOption) {
-      mainMenu.gameModeOption.classList.add('selecting');
-      setTimeout(() => mainMenu.gameModeOption.classList.remove('selecting'), 380);
-    }
-    const gamesLabel = mainMenu.gamesLabel;
-    if (gamesLabel) {
-      const originalColor = gamesLabel.style.color;
-      gamesLabel.style.color = '#cc9966';
-      setTimeout(() => {
-        gamesLabel.style.color = originalColor || '';
-      }, 650);
-    }
+    mainMenu.gameModeOption.focus();
     return;
   }
 
@@ -278,13 +267,11 @@ mainMenu.gameModeOption.addEventListener("click", () => {
   playBackgroundMusic();
 
   // Only reveal the top-down map preview (and generate the layout) once the user selects the game mode.
-  mainMenu.mapPreviewContainer.style.display = 'flex';
+  mainMenu.mapPreviewContainer.style.display = "flex";
+  setMapPreviewVisible(mainMenu.root, true);
   if (!currentWorld) {
     generatePreview();
   }
-
-  mainMenu.gameModeOption.classList.add("selecting");
-  setTimeout(() => mainMenu.gameModeOption.classList.remove("selecting"), 380);
 });
 
 mainMenu.startButton.addEventListener("click", startGame);
