@@ -48,38 +48,46 @@ let camera: THREE.PerspectiveCamera | undefined;
 let updateMovement: ((delta: number) => void) | undefined;
 let disposeControls: (() => void) | undefined;
 
-let menu: HTMLDivElement | undefined;
-let menuStyle: HTMLStyleElement | undefined;
 let gameStarted = false;
 
 let selectedGameMode: string | null = null;
-let gameEntryEl: HTMLButtonElement | undefined;
-let gamesLabelEl: HTMLDivElement | undefined;
 
 let previewRenderer: THREE.WebGLRenderer | undefined;
 let currentWorld: ReturnType<typeof createWorld> | undefined;
 
+const menuStyles = injectMainMenuStyles();
+const menuStyle = menuStyles.element;
+const mainMenu = buildMainMenu();
+document.body.appendChild(mainMenu.root);
+
+const previewCanvas = mainMenu.mapPreviewCanvas;
+previewCanvas.width = PREVIEW_SIZE;
+previewCanvas.height = PREVIEW_SIZE;
+previewRenderer = new THREE.WebGLRenderer({ canvas: previewCanvas, antialias: false });
+previewRenderer.setSize(PREVIEW_SIZE, PREVIEW_SIZE);
+
 function startGame() {
   if (!selectedGameMode) {
     // Visually prompt the user to select a game mode first
-    if (gameEntryEl) {
-      gameEntryEl.classList.add('selecting');
-      setTimeout(() => gameEntryEl?.classList.remove('selecting'), 380);
+    if (mainMenu.gameModeOption) {
+      mainMenu.gameModeOption.classList.add('selecting');
+      setTimeout(() => mainMenu.gameModeOption.classList.remove('selecting'), 380);
     }
-    if (gamesLabelEl) {
-      const originalColor = gamesLabelEl.style.color;
-      gamesLabelEl.style.color = '#cc9966';
+    const gamesLabel = mainMenu.gamesLabel;
+    if (gamesLabel) {
+      const originalColor = gamesLabel.style.color;
+      gamesLabel.style.color = '#cc9966';
       setTimeout(() => {
-        if (gamesLabelEl) gamesLabelEl.style.color = originalColor || '';
+        gamesLabel.style.color = originalColor || '';
       }, 650);
     }
     return;
   }
 
-  if (gameStarted || !menu || !menu.parentNode) return;
+  if (gameStarted || !mainMenu.root.parentNode) return;
   gameStarted = true;
 
-  menu.remove();
+  mainMenu.root.remove();
 
   // Use the last previewed world (if the player liked the layout and possibly regenerated)
   // so their choice is respected. Fall back to a fresh generation only if no preview existed.
@@ -148,14 +156,14 @@ function exitToMenu() {
   c.setAttribute("aria-hidden", "true");
 
   // Re-show the main menu (its DOM state like selected mode and preview visibility is preserved)
-  if (menu && !menu.parentNode) {
-    document.body.appendChild(menu);
+  if (!mainMenu.root.parentNode) {
+    document.body.appendChild(mainMenu.root);
   }
 
   // Re-prepare the preview renderer (was disposed on start) so that "REGENERATE LAYOUT"
   // works immediately after returning to the menu. The canvas bitmap from before
   // entering the game is still visible.
-  if (mainMenu && mainMenu.mapPreviewCanvas) {
+  if (mainMenu.mapPreviewCanvas) {
     const cvs = mainMenu.mapPreviewCanvas;
     if (!previewRenderer) {
       previewRenderer = new THREE.WebGLRenderer({ canvas: cvs, antialias: false });
@@ -181,33 +189,15 @@ function animate() {
   renderer.render(scene, camera);
 }
 
-// --- Home screen menu (shown first) ---
-const menuStyles = injectMainMenuStyles();
-menuStyle = menuStyles.element;
-
-const mainMenu = buildMainMenu();
-menu = mainMenu.root;
-gameEntryEl = mainMenu.gameModeOption;
-gamesLabelEl = mainMenu.gamesLabel;
-document.body.appendChild(menu);
-
-// --- Map preview (top-down orthographic view) setup ---
-const previewCanvas = mainMenu.mapPreviewCanvas;
-previewCanvas.width = PREVIEW_SIZE;
-previewCanvas.height = PREVIEW_SIZE;
-previewRenderer = new THREE.WebGLRenderer({ canvas: previewCanvas, antialias: false });
-previewRenderer.setSize(PREVIEW_SIZE, PREVIEW_SIZE);
-
 function disposeWorld(world: ReturnType<typeof createWorld>) {
-  world.scene.traverse((child: any) => {
-    if (child.geometry?.dispose) child.geometry.dispose();
+  world.scene.traverse((child) => {
+    if (!(child instanceof THREE.Mesh)) return;
+    child.geometry.dispose();
     const mat = child.material;
-    if (mat) {
-      if (Array.isArray(mat)) {
-        mat.forEach((m: any) => m.dispose && m.dispose());
-      } else if (mat.dispose) {
-        mat.dispose();
-      }
+    if (Array.isArray(mat)) {
+      for (const m of mat) m.dispose();
+    } else {
+      mat.dispose();
     }
   });
 }
@@ -277,7 +267,7 @@ mainMenu.gameModeOption.addEventListener("click", () => {
 mainMenu.startButton.addEventListener("click", startGame);
 
 window.addEventListener("keydown", (e) => {
-  if (menu && menu.parentNode && e.code === "Enter") {
+  if (mainMenu.root.parentNode && e.code === "Enter") {
     e.preventDefault();
     startGame();
   }
@@ -317,8 +307,8 @@ if (import.meta.hot) {
       disposeWorld(currentWorld);
       currentWorld = undefined;
     }
-    if (menu && menu.parentNode) menu.remove();
-    if (menuStyle && menuStyle.parentNode) menuStyle.remove();
+    if (mainMenu.root.parentNode) mainMenu.root.remove();
+    if (menuStyle.parentNode) menuStyle.remove();
     renderer.dispose();
   });
 }

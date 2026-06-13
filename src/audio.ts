@@ -1,6 +1,3 @@
-import type { } from "three"; // keep consistent with other modules if needed
-
-
 let audio: HTMLAudioElement | null = null;
 let currentSrc = '';
 let isPlaying = false;

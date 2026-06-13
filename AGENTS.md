@@ -16,10 +16,13 @@ Use **pnpm** (lockfile: `pnpm-lock.yaml`).
 |--------|---------|
 | Install deps | `pnpm install` |
 | Dev server | `pnpm dev` |
+| Typecheck | `pnpm typecheck` |
+| Lint | `pnpm lint` |
+| Test | `pnpm test` |
 | Typecheck + build | `pnpm build` |
 | Preview production build | `pnpm preview` |
 
-There is no test runner or linter script configured yet. After meaningful changes, run `pnpm build` to verify TypeScript and the Vite bundle.
+After meaningful changes, run `pnpm lint`, `pnpm test`, and `pnpm build` to verify the project.
 
 ## Project layout
 
